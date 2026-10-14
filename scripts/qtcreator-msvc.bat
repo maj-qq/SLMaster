@@ -1,0 +1,13 @@
+@echo off
+for %%I in ("%~dp0..") do set "SLMASTER_ROOT=%%~fI"
+set "SLMASTER_VC=%SLMASTER_ROOT%\.deps\msvc\VC\Tools\MSVC\14.44.35207"
+set "SLMASTER_SDK=C:\Program Files (x86)\Windows Kits\10"
+set "PATH=%SLMASTER_VC%\bin\Hostx64\x64;%SLMASTER_SDK%\bin\10.0.26100.0\x64;%PATH%"
+set "INCLUDE=%SLMASTER_VC%\include;%SLMASTER_VC%\atlmfc\include;%SLMASTER_SDK%\Include\10.0.26100.0\ucrt;%SLMASTER_SDK%\Include\10.0.26100.0\shared;%SLMASTER_SDK%\Include\10.0.26100.0\um;%SLMASTER_SDK%\Include\10.0.26100.0\winrt"
+set "LIB=%SLMASTER_VC%\lib\x64;%SLMASTER_VC%\atlmfc\lib\x64;%SLMASTER_SDK%\Lib\10.0.26100.0\ucrt\x64;%SLMASTER_SDK%\Lib\10.0.26100.0\um\x64"
+set "VCToolsInstallDir=%SLMASTER_VC%\"
+set "WindowsSdkDir=%SLMASTER_SDK%\"
+set "WindowsSDKVersion=10.0.26100.0\"
+set "VSCMD_ARG_TGT_ARCH=x64"
+set "VSCMD_ARG_HOST_ARCH=x64"
+set "VSLANG=1033"

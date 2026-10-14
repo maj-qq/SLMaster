@@ -24,7 +24,7 @@ FluWindow {
 
     Component.onCompleted: {
         JSONListModel.query = "$.camera.algorithm[*]";
-        JSONListModel.source = "qrc:/res/config/binoocularCameraConfig.json";
+        JSONListModel.source = "qrc:/res/config/binocularCameraConfig.json";
 
         //初始化所有的vtk item
         timeline_nav.curPage = 3;

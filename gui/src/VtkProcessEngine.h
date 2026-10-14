@@ -15,6 +15,7 @@
 #include <QObject>
 #include <QQmlApplicationEngine>
 #include <QQuickVTKRenderWindow.h>
+#include "CloudTypes.h"
 #include <QQuickWindow>
 #include <QTimer>
 

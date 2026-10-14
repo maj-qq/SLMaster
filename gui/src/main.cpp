@@ -2,6 +2,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickWindow>
+#include <QDir>
 
 #include "AppType.h"
 #include "ImagePaintItem.h"
@@ -40,7 +41,8 @@ int main(int argc, char *argv[])
 #endif
 #endif
     qputenv("QT_QUICK_CONTROLS_STYLE","Basic");
-    QGuiApplication::setWindowIcon(QIcon("qrc:/res/image/icons8-maple-leaf-48.ico"));
+    // The application reads its bundled JSON models with XMLHttpRequest.
+    qputenv("QML_XHR_ALLOW_FILE_READ", "1");
     QGuiApplication::setOrganizationName("Evans Liu");
     QGuiApplication::setOrganizationDomain("https://github.com/Practice3DVision");
     QGuiApplication::setApplicationName("SLMasterGui");
@@ -67,6 +69,9 @@ int main(int argc, char *argv[])
     vtkOutputWindow::SetGlobalWarningDisplay(0);
 
     QGuiApplication app(argc, argv);
+    // Demo data and camera configuration paths are relative to build/gui.
+    QDir::setCurrent(QCoreApplication::applicationDirPath());
+    QGuiApplication::setWindowIcon(QIcon("qrc:/res/image/icons8-maple-leaf-48.ico"));
     QQmlApplicationEngine engine;
 
     QuickQanava::initialize(&engine);

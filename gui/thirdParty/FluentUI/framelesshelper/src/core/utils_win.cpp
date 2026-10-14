@@ -43,6 +43,7 @@
 #include <QtCore/qtextstream.h>
 #include <QtGui/qwindow.h>
 #include <QtGui/qguiapplication.h>
+#include <QtGui/qstylehints.h>
 #if FRAMELESSHELPER_CONFIG(private_qt)
 #  include <QtCore/private/qsystemerror_p.h>
 #  if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
@@ -2305,7 +2306,9 @@ bool Utils::shouldAppsUseDarkMode_windows()
         return false;
     }
 #if FRAMELESSHELPER_CONFIG(private_qt)
-#  if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
+#  if (QT_VERSION >= QT_VERSION_CHECK(6, 5, 0))
+    return (QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark);
+#  elif (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
     if (const auto app = qApp->nativeInterface<QNativeInterface::Private::QWindowsApplication>()) {
         return app->isDarkMode();
     } else {

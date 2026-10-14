@@ -10,6 +10,7 @@ Window {
     property int launchMode: FluWindowType.Standard
     property var argument:({})
     property var background : com_background
+    property bool fillBackground: true
     property bool fixSize: false
     property Component loadingItem: com_loading
     property bool fitsAppBarWindows: false
@@ -113,7 +114,10 @@ Window {
         }
     }
     FluLoader{
-        anchors.fill: parent
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: fillBackground ? parent.height : 80
         sourceComponent: background
     }
     FluLoader{

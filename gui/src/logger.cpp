@@ -16,7 +16,7 @@ unique_ptr<QTextStream> textStream = nullptr;
 static inline void myMessageHandler(const QtMsgType type,
                                     const QMessageLogContext &context,
                                     const QString &message) {
-    if (message.isEmpty() || type == QtWarningMsg)
+    if (message.isEmpty())
         return;
 
     const QString formatMessage =
@@ -25,11 +25,9 @@ static inline void myMessageHandler(const QtMsgType type,
     if (type == QtInfoMsg || type == QtDebugMsg) {
         std::cout << qUtf8Printable(message) << std::endl;
     } 
-    /*
     else {
         std::cerr << qUtf8Printable(message) << std::endl;
     }
-    */
     if (textStream && fileHandle) {
         *textStream << formatMessage << Qt::endl;
     }
@@ -40,9 +38,9 @@ void setUp(const QString &appName) {
 
     if (!fileHandle || !textStream) {
         fileHandle = make_unique<QFile>(QString("debug-%1.log").arg(appName));
-        if (!fileHandle->open(QIODevice::ReadWrite | QIODevice::Text |
-                              QIODevice::Append | QIODevice::Truncate)) {
-            fileHandle->reset();
+        if (!fileHandle->open(QIODevice::WriteOnly | QIODevice::Text |
+                              QIODevice::Truncate)) {
+            fileHandle.reset();
         } else {
             textStream = make_unique<QTextStream>();
             textStream->setDevice(fileHandle.get());

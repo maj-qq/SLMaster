@@ -7,14 +7,14 @@ set (qan_plugin_files
 
 # Configure Qt
 set(CMAKE_AUTOMOC ON)
-qt_wrap_cpp(qan_source_files, qan_header_files)   # Creates .moc files from sources
 set(CMAKE_AUTORCC ON)
 set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS $<$<CONFIG:Debug>:QT_QML_DEBUG>)
 
 # Configure QuickQanava library ###############################################
 list(APPEND qan_resources QuickQanava_static.qrc)
 list(APPEND qan_resources GraphicalEffects6/QuickQanavaGraphicalEffects.qrc)
-add_library(QuickQanava STATIC ${qan_source_files} ${qan_header_files} ${qan_resources})
+add_library(QuickQanava STATIC ${qan_source_files} ${qan_header_files}
+    ${quickcontainers_source_files} ${quickcontainers_header_files} ${qan_resources})
 
 target_include_directories(QuickQanava
     PUBLIC

@@ -14,18 +14,7 @@
 
 #include "QuickQanava.h"
 
-#include <pcl/point_types.h>
-#include <pcl/point_cloud.h>
-#include <pcl/PolygonMesh.h>
-#include <pcl/ModelCoefficients.h>
-
-#include <vtkSmartPointer.h>
-#include <vtkActor.h>
-
-Q_DECLARE_METATYPE(pcl::PointCloud<pcl::PointXYZRGB>::Ptr)
-Q_DECLARE_METATYPE(pcl::PolygonMesh::Ptr)
-Q_DECLARE_METATYPE(pcl::ModelCoefficients::Ptr)
-Q_DECLARE_METATYPE(vtkSmartPointer<vtkActor>)
+#include "CloudTypes.h"
 
 class FlowNode : public qan::Node
 {

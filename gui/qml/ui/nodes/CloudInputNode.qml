@@ -1,7 +1,6 @@
 import QtQuick              2.15
 import QtQuick.Controls     2.15
 import QtQuick.Layouts      1.15
-import QtQuick.Dialogs      1.3
 import Qt.labs.platform     1.1
 
 import FluentUI 1.0
@@ -107,10 +106,10 @@ Qan.NodeItem {
 
                 FileDialog {
                     id: selectCloudFileDialog
-                    fileMode: FileDialog.Open
+                    fileMode: FileDialog.OpenFile
 
                     onAccepted: {
-                        node.filePath = file.toString();
+                        node.filePath = currentFile.toString();
                     }
                 }
             }

@@ -20,7 +20,9 @@
 
 void FluentUI::registerTypes(QQmlEngine *engine){
     initializeEngine(engine,uri);
+#if (QT_VERSION < QT_VERSION_CHECK(6, 2, 0))
     registerTypes(uri);
+#endif
 }
 
 void FluentUI::registerTypes(const char *uri){
@@ -162,6 +164,7 @@ void FluentUI::initializeEngine(QQmlEngine *engine, const char *uri){
     font.setFamily("Microsoft YaHei UI");
     QGuiApplication::setFont(font);
 #endif
+#if (QT_VERSION < QT_VERSION_CHECK(6, 2, 0))
     FluApp* app = FluApp::getInstance();
     engine->rootContext()->setContextProperty("FluApp",app);
     FluColors* colors = FluColors::getInstance();
@@ -176,5 +179,6 @@ void FluentUI::initializeEngine(QQmlEngine *engine, const char *uri){
     engine->rootContext()->setContextProperty("FluEventBus",eventBus);
     FluNetwork* network = FluNetwork::getInstance();
     engine->rootContext()->setContextProperty("FluNetwork",network);
+#endif
     engine->addImportPath("qrc:/qt/qml");
 }

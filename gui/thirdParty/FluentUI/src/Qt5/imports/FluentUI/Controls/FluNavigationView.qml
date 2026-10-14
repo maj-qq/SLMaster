@@ -12,8 +12,11 @@ Item {
     property int displayMode: FluNavigationViewType.Auto
     property Component autoSuggestBox
     property Component actionItem
+    property Component titleActions
+    property int appBarHeight: 40
     property int topPadding: 0
     property int pageMode: FluNavigationViewType.Stack
+    readonly property int currentIndex: nav_list.currentIndex
     property FluMenu navItemRightMenu
     property FluMenu navItemExpanderRightMenu
     property int navCompactWidth: 50
@@ -680,7 +683,7 @@ Item {
     Item {
         id:nav_app_bar
         width: parent.width
-        height: visible ? 40 : 0
+        height: visible ? control.appBarHeight : 0
         anchors{
             top: parent.top
             topMargin: control.topPadding
@@ -787,6 +790,11 @@ Item {
                 text:control.title
                 Layout.leftMargin: 12
                 font: FluTextStyle.Body
+            }
+            FluLoader {
+                sourceComponent: control.titleActions
+                Layout.leftMargin: item ? 12 : 0
+                Layout.alignment: Qt.AlignVCenter
             }
         }
         Item{

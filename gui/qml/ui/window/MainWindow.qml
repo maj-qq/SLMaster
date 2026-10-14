@@ -36,7 +36,7 @@ FluWindow {
     appBar: FluAppBar {
         width: window.width
         height: 30
-        darkText: Lang.dark_mode
+        darkText: window.width >= 640 ? Lang.dark_mode : ""
         showDark: true
         darkClickListener: (button)=>handleDarkChanged(button)
         closeClickListener: ()=>{dialog_close.open()}
@@ -92,8 +92,10 @@ FluWindow {
 
     FluNavigationView {
         id: nav_view
+        z: 1
         width: parent.width
         height: parent.height
+        appBarHeight: window.appBar.height
         items: ItemsOriginal
         pageMode: FluNavigationViewType.Stack
         topPadding: FluTools.isMacos() ? 20 : 0
@@ -101,40 +103,39 @@ FluWindow {
         logo: AppIcon.application
         title: "SLMasterGui"
 
+        titleActions: Row {
+            spacing: 2
+            FluIconButton {
+                width: 30
+                height: 30
+                iconSource: FluentIcons.Settings
+                iconSize: 15
+                text: Lang.settings
+                onClicked: FluApp.navigate("/SettingsPage")
+            }
+            FluIconButton {
+                width: 30
+                height: 30
+                iconSource: FluentIcons.Help
+                iconSize: 15
+                text: Lang.about
+                onClicked: FluApp.navigate("/AboutWindow")
+            }
+        }
+
         Component.onCompleted: {
             ItemsOriginal.navigationView = nav_view;
             setCurrentIndex(0);
         }
     }
 
-    FluIconButton{
-        id:btn_setttings
-        iconSource: FluentIcons.Settings
-        iconSize: 15
-        anchors.left: parent.left
-        anchors.top: parent.top
-        anchors.leftMargin: 120
-        anchors.topMargin: 4
-        implicitWidth: 30
-        implicitHeight: 30
-        clip: true
-        onClicked: {
-            FluApp.navigate("/SettingsPage")
-        }
-    }
-
-    FluIconButton{
-        id:btn_about
-        iconSource: FluentIcons.Help
-        iconSize: 15
-        anchors.left: btn_setttings.right
-        anchors.top: parent.top
-        anchors.topMargin: 4
-        implicitWidth: 30
-        implicitHeight: 30
-        clip: true
-        onClicked: {
-            FluApp.navigate("/AboutWindow")
+    Connections {
+        target: nav_view
+        function onCurrentIndexChanged() {
+            if (nav_view.currentIndex >= 0) {
+                timeline_nav.curPage = nav_view.currentIndex;
+                timeline_nav.updateCheckedState();
+            }
         }
     }
 
@@ -142,8 +143,8 @@ FluWindow {
         id: timeline_nav
         anchors.top: parent.top
         width: parent.width
-        height: 40
-        anchors.topMargin: 40
+        height: 65
+        anchors.topMargin: 30
 
         onCurPageChanged: {
             if(curPage == 3 || curPage == 5) {
@@ -160,7 +161,9 @@ FluWindow {
                 window.fillBackgroundChanged();
             }
 
-            nav_view.setCurrentIndex(curPage);
+            if (nav_view.getCurrentIndex() !== curPage) {
+                nav_view.setCurrentIndex(curPage);
+            }
         }
 
         Connections {
@@ -200,6 +203,7 @@ FluWindow {
 
     FluLoader {
         id: loader_reveal
+        z: 2
         anchors.fill: parent
     }
 

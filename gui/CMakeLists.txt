@@ -28,6 +28,8 @@ else()
 endif()
 
 add_executable(SLMasterGui WIN32)
+configure_file(config/GenICamLogging.properties
+    ${CMAKE_CURRENT_BINARY_DIR}/config/GenICamLogging.properties COPYONLY)
 if(FLUENTUI_BUILD_STATIC_LIB)
     target_compile_definitions(SLMasterGui PRIVATE FLUENTUI_BUILD_STATIC_LIB)
     target_include_directories(SLMasterGui PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdParty/FluentUI/src)

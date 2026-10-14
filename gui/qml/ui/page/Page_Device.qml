@@ -14,8 +14,7 @@ FluContentPage{
     title:""
     launchMode: FluPageType.SingleInstance
 
-    anchors.topMargin: 50
-    anchors.fill: parent
+    topPadding: 65
 
     property real light_strength: CameraEngine.getNumberAttribute("Light Strength")
     property int pre_exposure_time: CameraEngine.getNumberAttribute("Pre Exposure Time")
@@ -67,7 +66,7 @@ FluContentPage{
 
         ColumnLayout {
             Layout.preferredWidth: 360
-            Layout.preferredHeight: parent.height
+            Layout.fillHeight: true
             spacing: 10
 
             FluLoader {
@@ -126,7 +125,7 @@ FluContentPage{
 
                     FluArea {
                         opacity: 0.8
-                        Layout.preferredWidth: parent.width
+                        Layout.fillWidth: true
                         Layout.fillHeight: true
 
                         FluScrollablePage {
@@ -134,7 +133,7 @@ FluContentPage{
                             anchors.margins: 10
 
                             ColumnLayout {
-                                anchors.fill: parent
+                                Layout.fillWidth: true
 
                                 RowLayout {
                                     Layout.fillWidth: true
@@ -171,8 +170,6 @@ FluContentPage{
 
                                 RowLayout{
                                     Layout.fillWidth: true
-                                    Layout.fillHeight: true
-
                                     FluComboBox{
                                         id: camera_type_select
                                         Layout.fillWidth: true
@@ -196,7 +193,6 @@ FluContentPage{
                                     FluButton {
                                         id: connect_btn
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: camera_type_select.height
                                         text: CameraEngine.isConnected ? Lang.disconnect : Lang.connect
 
                                         onClicked: {
@@ -236,10 +232,10 @@ FluContentPage{
 
                                     FluSpinBox {
                                         id: light_strength_spinbox
-                                        Layout.preferredWidth: parent.width / 3
+                                        Layout.preferredWidth: 100
                                         editable: true
-                                        up.indicator: undefined
-                                        down.indicator: undefined
+                                        up.indicator: null
+                                        down.indicator: null
                                         from: 10
                                         to: 100
                                         stepSize: 100
@@ -290,10 +286,10 @@ FluContentPage{
 
                                     FluSpinBox {
                                         id: pre_exposure_time_spinbox
-                                        Layout.preferredWidth: parent.width / 3
+                                        Layout.preferredWidth: 100
                                         editable: true
-                                        up.indicator: undefined
-                                        down.indicator: undefined
+                                        up.indicator: null
+                                        down.indicator: null
                                         from: 100
                                         to: 100000000
                                         value: root.pre_exposure_time
@@ -331,10 +327,10 @@ FluContentPage{
 
                                     FluSpinBox {
                                         id: exposure_time_spinbox
-                                        Layout.preferredWidth: parent.width / 3
+                                        Layout.preferredWidth: 100
                                         editable: true
-                                        up.indicator: undefined
-                                        down.indicator: undefined
+                                        up.indicator: null
+                                        down.indicator: null
                                         from: 100
                                         to: 100000000
                                         value: root.exposure_time
@@ -372,10 +368,10 @@ FluContentPage{
 
                                     FluSpinBox {
                                         id: aft_exposure_time_spinbox
-                                        Layout.preferredWidth: parent.width / 3
+                                        Layout.preferredWidth: 100
                                         editable: true
-                                        up.indicator: undefined
-                                        down.indicator: undefined
+                                        up.indicator: null
+                                        down.indicator: null
                                         from: 100
                                         to: 100000000
                                         value: root.aft_exposure_time
@@ -523,14 +519,13 @@ FluContentPage{
 
                     FluArea {
                         opacity: 0.8
-                        Layout.preferredWidth: parent.width
+                        Layout.fillWidth: true
                         Layout.fillHeight: true
 
                         FluScrollablePage {
                             anchors.fill: parent
                             anchors.margins: 10
                             ColumnLayout {
-                                Layout.fillHeight: true
                                 Layout.fillWidth: true
 
                                 FluText {
@@ -796,7 +791,7 @@ FluContentPage{
                                     Layout.fillWidth: true
                                     Layout.topMargin: 10
                                     FluButton {
-                                        Layout.preferredWidth: parent.width / 2
+                                        Layout.fillWidth: true
                                         text: Lang.encode
 
                                         onClicked: {

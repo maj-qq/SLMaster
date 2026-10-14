@@ -630,7 +630,7 @@ void CameraEngine::pauseScan() {
 
 void CameraEngine::setPatternType(const int patternType) {
     auto slCamera = getSLCamera();
-    double shiftTime, cycles, confidenceThreshold, costMinDiff, costMaxDiff,
+    double shiftTime, cycles, confidenceThreshold, costMinDiff,
         maxCost, minDisp, maxDisp, minDepth, maxDepth;
     double lightStrength, exposureTime;
     double curPattern;
@@ -645,11 +645,6 @@ void CameraEngine::setPatternType(const int patternType) {
     slCamera->getStringAttribute("DLP Width", dlpWidth);
     slCamera->getStringAttribute("DLP Height", dlpHeight);
     slCamera->getNumbericalAttribute("Contrast Threshold", confidenceThreshold);
-    slCamera->getNumbericalAttribute("Cost Min Diff", costMinDiff);
-    slCamera->getNumbericalAttribute("Cost Max Diff", costMaxDiff);
-    slCamera->getNumbericalAttribute("Max Cost", maxCost);
-    slCamera->getNumbericalAttribute("Min Disparity", minDisp);
-    slCamera->getNumbericalAttribute("Max Disparity", maxDisp);
     slCamera->getNumbericalAttribute("Minimum Depth", minDepth);
     slCamera->getNumbericalAttribute("Maximum Depth", maxDepth);
     slCamera->getNumbericalAttribute("Light Strength", lightStrength);
@@ -657,6 +652,11 @@ void CameraEngine::setPatternType(const int patternType) {
     slCamera->getNumbericalAttribute("Pattern", curPattern);
 
     if (cameraType_ == AppType::CameraType::BinocularSLCamera) {
+        slCamera->getNumbericalAttribute("Cost Min Diff", costMinDiff);
+        slCamera->getNumbericalAttribute("Max Cost", maxCost);
+        slCamera->getNumbericalAttribute("Min Disparity", minDisp);
+        slCamera->getNumbericalAttribute("Max Disparity", maxDisp);
+
         if (patternType == AppType::PatternMethod::SinusCompleGrayCode) {
             BinoSinusCompleGrayCodePattern::Params params;
 
@@ -843,6 +843,9 @@ void CameraEngine::setPatternType(const int patternType) {
         }
     } else if (patternType == AppType::PatternMethod::MultiViewStereoGeometry) {
 #ifdef OPENCV_WITH_CUDA_MODULE
+        slCamera->getNumbericalAttribute("Cost Min Diff", costMinDiff);
+        slCamera->getNumbericalAttribute("Max Cost", maxCost);
+
         TrinocularMultiViewStereoGeometryPattern::Params params;
 
         params.shiftTime_ = std::round(shiftTime);

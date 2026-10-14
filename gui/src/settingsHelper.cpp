@@ -21,7 +21,9 @@ void SettingsHelper::init(const QString& iniFileName) {
 
     settingsHandle_ = make_unique<QSettings>(dataPath, QSettings::Format::IniFormat, this);
 
-    qInfo() << "load settings file sucess.";
+    if (settingsHandle_->status() != QSettings::NoError) {
+        qWarning() << "Failed to load settings file:" << dataPath;
+    }
 }
 
 void SettingsHelper::setValue(const QString &key, const QVariant &value) {
@@ -41,10 +43,6 @@ QVariant SettingsHelper::getValue(const QString &key,
 
     if (key.isEmpty()) {
         qWarning() << "setting's key is empty or value is invalid.";
-    }
-
-    if (!settingsHandle_->contains(key)) {
-        qWarning() << "setting file dosn't contain this key: " + key + ", return default val: " + defaultValue.toString();
     }
 
     return settingsHandle_->value(key, defaultValue);

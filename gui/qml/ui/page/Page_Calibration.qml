@@ -14,11 +14,7 @@ FluContentPage{
     title:""
     launchMode: FluPageType.SingleInstance
 
-    anchors.topMargin: 50
-    anchors.top: parent.top
-    anchors.bottom: parent.bottom
-    anchors.left: parent.left
-    anchors.right: parent.right
+    topPadding: 65
 
     Component{
         id:com_calibration_type

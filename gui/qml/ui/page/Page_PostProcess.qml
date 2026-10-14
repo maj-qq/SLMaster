@@ -16,11 +16,7 @@ FluContentPage {
     title: ""
     launchMode: FluPageType.SingleInstance
 
-    anchors.topMargin: 40
-    anchors.top: parent.top
-    anchors.bottom: parent.bottom
-    anchors.left: parent.left
-    anchors.right: parent.right
+    topPadding: 65
     leftPadding: 0
     rightPadding: 0
     bottomPadding: 0

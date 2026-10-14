@@ -6,6 +6,10 @@ import FluentUI 1.0
 FluObject{
 
     property var navigationView
+    function navigate(item) {
+        item.count = 0;
+        navigationView.push(item.url);
+    }
 
     function rename(item, newName){
         if(newName && newName.trim().length>0){
@@ -15,68 +19,50 @@ FluObject{
 
     FluPaneItem{
         id:item_device
+        title: Lang.device
+        icon: FluentIcons.Camera
         url: "qrc:/ui/page/Page_Device.qml"
-        onTap:{
-            if(navigationView.getCurrentUrl()){
-                item_device.count = 0
-            }
-            navigationView.push(url)
-        }
+        onTap: navigate(item_device)
     }
 
     FluPaneItem{
         id:item_calibration
+        title: Lang.calibration
+        icon: FluentIcons.Ruler
         url: "qrc:/ui/page/Page_Calibration.qml"
-        onTap:{
-            if(navigationView.getCurrentUrl()){
-                item_calibration.count = 0
-            }
-            navigationView.push(url)
-        }
+        onTap: navigate(item_calibration)
     }
 
     FluPaneItem{
         id:item_scan_mode
+        title: Lang.scan_mode
+        icon: FluentIcons.SetTile
         url: "qrc:/ui/page/Page_ScanMode.qml"
-        onTap:{
-            if(navigationView.getCurrentUrl()){
-                item_scan_mode.count = 0
-            }
-            navigationView.push(url)
-        }
+        onTap: navigate(item_scan_mode)
     }
 
     FluPaneItem{
         id:item_scan
+        title: Lang.scan
+        icon: FluentIcons.Scan
         url: "qrc:/ui/page/Page_Scan.qml"
-        onTap:{
-            if(navigationView.getCurrentUrl()){
-                item_scan.count = 0
-            }
-            navigationView.push(url)
-        }
+        onTap: navigate(item_scan)
     }
 
     FluPaneItem{
         id:item_post_process
+        title: Lang.post_process
+        icon: FluentIcons.Processing
         url: "qrc:/ui/page/Page_PostProcess.qml"
-        onTap:{
-            if(navigationView.getCurrentUrl()){
-                item_scan.count = 0
-            }
-            navigationView.push(url)
-        }
+        onTap: navigate(item_post_process)
     }
 
     FluPaneItem{
         id:item_postProcessOutput
+        title: Lang.post_process_output
+        icon: FluentIcons.View
         url: "qrc:/ui/page/Page_PostProcessOutput.qml"
-        onTap:{
-            if(navigationView.getCurrentUrl()){
-                item_postProcessOutput.count = 0
-            }
-            navigationView.push(url)
-        }
+        onTap: navigate(item_postProcessOutput)
     }
 
     function getRecentlyAddedData(){

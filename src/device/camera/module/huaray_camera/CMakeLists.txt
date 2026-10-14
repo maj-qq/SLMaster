@@ -34,3 +34,9 @@ target_link_libraries(
     ${OpenCV_LIBRARIES}
     MVSDKmd
 )
+
+if(MSVC)
+    # Initialize SDK logging in the application before the SDK's DLL startup runs.
+    target_link_options(huarayCamera PUBLIC /DELAYLOAD:MVSDKmd.dll)
+    target_link_libraries(huarayCamera PUBLIC delayimp)
+endif()

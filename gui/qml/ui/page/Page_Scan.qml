@@ -14,11 +14,7 @@ FluContentPage {
     title: ""
     launchMode: FluPageType.SingleInstance
 
-    anchors.topMargin: 40
-    anchors.top: parent.top
-    anchors.bottom: parent.bottom
-    anchors.left: parent.left
-    anchors.right: parent.right
+    topPadding: 65
     leftPadding: 0
     rightPadding: 0
     bottomPadding: 0
@@ -316,10 +312,10 @@ FluContentPage {
 
                                 FluSpinBox {
                                     id: light_strength_spinbox
-                                    Layout.preferredWidth: parent.width / 3
+                                    Layout.preferredWidth: 100
                                     editable: true
-                                    up.indicator: undefined
-                                    down.indicator: undefined
+                                    up.indicator: null
+                                    down.indicator: null
                                     from: 10
                                     to: 100
                                     stepSize: 100
@@ -368,10 +364,10 @@ FluContentPage {
 
                                 FluSpinBox {
                                     id: exposure_time_spinbox
-                                    Layout.preferredWidth: parent.width / 3
+                                    Layout.preferredWidth: 100
                                     editable: true
-                                    up.indicator: undefined
-                                    down.indicator: undefined
+                                    up.indicator: null
+                                    down.indicator: null
                                     from: 100
                                     to: 10000000
                                     value: root.cur_exposure_time
@@ -408,10 +404,10 @@ FluContentPage {
 
                                 FluSpinBox {
                                     id: filter_threshod_spinbox
-                                    Layout.preferredWidth: parent.width / 3
+                                    Layout.preferredWidth: 100
                                     editable: true
-                                    up.indicator: undefined
-                                    down.indicator: undefined
+                                    up.indicator: null
+                                    down.indicator: null
                                     from: 0
                                     to: 255
                                     value: root.filter_threshod

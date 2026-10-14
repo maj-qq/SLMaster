@@ -3,6 +3,7 @@
 #include <QQmlContext>
 #include <QQuickWindow>
 #include <QDir>
+#include <QFile>
 
 #include "AppType.h"
 #include "ImagePaintItem.h"
@@ -69,6 +70,15 @@ int main(int argc, char *argv[])
     vtkOutputWindow::SetGlobalWarningDisplay(0);
 
     QGuiApplication app(argc, argv);
+    if (!qEnvironmentVariableIsSet("GENICAM_LOG_CONFIG_V3_0")) {
+        const QString logConfig = QDir(QCoreApplication::applicationDirPath())
+                                      .filePath("config/GenICamLogging.properties");
+        if (QFile::exists(logConfig)) {
+            qputenv("GENICAM_LOG_CONFIG_V3_0", QFile::encodeName(logConfig));
+        } else {
+            qWarning() << "GenICam logging configuration not found:" << logConfig;
+        }
+    }
     // Demo data and camera configuration paths are relative to build/gui.
     QDir::setCurrent(QCoreApplication::applicationDirPath());
     QGuiApplication::setWindowIcon(QIcon("qrc:/res/image/icons8-maple-leaf-48.ico"));
@@ -100,7 +110,6 @@ int main(int argc, char *argv[])
 #ifdef FLUENTUI_BUILD_STATIC_LIB
     FluentUI::getInstance()->registerTypes(&engine);
 #endif
-    qDebug()<< engine.importPathList();
 
     const QUrl url(QStringLiteral("qrc:/ui/App.qml"));
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,

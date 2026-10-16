@@ -7,6 +7,7 @@ import FluentUI
 
 Item {
     property int currentIndex : -1
+    property var currentNode: d.current
     property var dataSource
     property bool showLine: true
     property bool draggable: false
@@ -14,6 +15,7 @@ Item {
     property int depthPadding: 30
     property bool checkable: false
     property color lineColor: FluTheme.dark ? Qt.rgba(111/255,111/255,111/255,1) : Qt.rgba(217/255,217/255,217/255,1)
+    signal itemPressed(var mouse)
     id:control
     QtObject {
         id:d
@@ -25,6 +27,8 @@ Item {
         property color hitColor: FluTheme.primaryColor
     }
     onDataSourceChanged: {
+        d.current = null
+        currentIndex = -1
         tree_model.setDataSource(dataSource)
     }
     FluTreeModel{
@@ -152,6 +156,7 @@ Item {
                 anchors.fill: parent
                 drag.target:control.draggable ? loader_container : undefined
                 hoverEnabled: true
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
                 drag.onActiveChanged: {
                     if(drag.active){
                         if(itemModel.isExpanded && itemModel.hasChildren()){
@@ -171,6 +176,9 @@ Item {
                         loader_container.height = item_container.height
                         loader_container.x = 0
                         loader_container.y = cellPosition.y
+                        control.currentIndex = rowIndex
+                        d.current = itemModel
+                        control.itemPressed(mouse)
                     }
                 onClicked: {
                     d.current = itemModel

@@ -18,6 +18,7 @@ Item {
     property int topPadding: 0
     property int pageMode: FluNavigationViewType.Stack
     readonly property int currentIndex: nav_list.currentIndex
+    readonly property bool navigationPanelVisible: d.enableNavigationPanel
     property FluMenu navItemRightMenu
     property FluMenu navItemExpanderRightMenu
     property int navCompactWidth: 50

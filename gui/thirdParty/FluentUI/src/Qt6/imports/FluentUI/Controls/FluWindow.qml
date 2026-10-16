@@ -11,6 +11,7 @@ Window {
     property var argument:({})
     property var background : com_background
     property bool fillBackground: true
+    property real backgroundHeaderHeight: 80
     property bool fixSize: false
     property Component loadingItem: com_loading
     property bool fitsAppBarWindows: false
@@ -117,7 +118,7 @@ Window {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: fillBackground ? parent.height : 80
+        height: fillBackground ? parent.height : backgroundHeaderHeight
         sourceComponent: background
     }
     FluLoader{

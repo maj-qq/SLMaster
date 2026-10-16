@@ -31,7 +31,7 @@ FluContentPage{
                 radius: [5,5,5,5]
                 width: 300
                 height: 320
-                anchors.centerIn: parent.Center
+                anchors.centerIn: parent
                 Rectangle{
                     anchors.fill: parent
                     radius: 5
@@ -118,14 +118,14 @@ FluContentPage{
             append({icon:"qrc:/res/image/icons8-projector-96.png", title: model_header.element_titles[2], desc: model_header.element_tips[2], url:"qrc:/ui/page/SubPage_OnlineProjectorCalibration.qml"});
         }
 
-        onElement_tipsChanged: {
-            setProperty(0, "title", model_header.element_titles[0]);
-            setProperty(0, "desc", model_header.element_tips[0]);
-            setProperty(1, "title", model_header.element_titles[1]);
-            setProperty(1, "desc", model_header.element_tips[1]);
-            setProperty(2, "title", model_header.element_titles[2]);
-            setProperty(2, "desc", model_header.element_tips[2]);
+        function updateLabels() {
+            for (var i = 0; i < count; ++i) {
+                setProperty(i, "title", element_titles[i]);
+                setProperty(i, "desc", element_tips[i]);
+            }
         }
+        onElement_titlesChanged: updateLabels()
+        onElement_tipsChanged: updateLabels()
     }
 
     Component {
@@ -163,10 +163,17 @@ FluContentPage{
         id: loader
         anchors.fill: parent
         sourceComponent: com_init
+        onStatusChanged: {
+            if (status === Loader.Error) {
+                sourceComponent = com_init;
+                showError(qsTr("Unable to open this page. Please check the application log."));
+            }
+        }
     }
 
     Connections {
         target: loader.item
+        ignoreUnknownSignals: true
 
         function onBack() {
             loader.sourceComponent = com_init;

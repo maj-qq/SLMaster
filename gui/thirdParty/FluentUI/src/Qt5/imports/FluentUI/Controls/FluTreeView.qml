@@ -28,6 +28,7 @@ Item {
         property color hitColor: FluTheme.primaryColor
     }
     onDataSourceChanged: {
+        d.current = null
         tree_model.setDataSource(dataSource)
     }
     FluTreeModel{
@@ -176,6 +177,7 @@ Item {
                         loader_container.x = 0
                         loader_container.y = cellPosition.y
 
+                        d.current = itemModel
                         itemPressed(mouse)
                     }
                 onClicked: {

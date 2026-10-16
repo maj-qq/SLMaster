@@ -26,15 +26,15 @@ FluContentPage{
             const list = [
                 {
                     title: leftKey,
-                    leftKey,
+                    key: "left",
                 },
                 {
                     title: rightKey,
-                    rightKey,
+                    key: "right",
                 },
                 {
                     title: colorKey,
-                    colorKey,
+                    key: "color",
                 },
             ];
             return list;
@@ -120,17 +120,17 @@ FluContentPage{
                             }
 
                             onCurrentNodeChanged: {
-                                if(!currentNode) {
+                                if(!currentNode || currentNode.depth === 0) {
                                     return;
                                 }
 
                                 if(currentNode.title !== "Left Camera" && currentNode.title !== "Right Camera" && currentNode.title !== "Color Camera") {
 
                                     var path = "";
-                                    if(currentNode.parent.title === "Left Camera") {
+                                    if(currentNode.parent.key === "left") {
                                         path = left_camera_model.curFolderPath() + "/" + currentNode.title;
                                     }
-                                    else if (currentNode.parent.title === "Right Camera") {
+                                    else if (currentNode.parent.key === "right") {
                                         path = right_camera_model.curFolderPath() + "/" + currentNode.title;
                                     }
                                     else {
@@ -141,7 +141,7 @@ FluContentPage{
                             }
 
                             onItemPressed: (mouse)=>{
-                                if(!currentNode) {
+                                if(!currentNode || currentNode.depth === 0) {
                                     return;
                                 }
 

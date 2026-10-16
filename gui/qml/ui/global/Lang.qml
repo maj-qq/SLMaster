@@ -3,6 +3,17 @@ pragma Singleton
 import QtQuick 2.15
 
 QtObject {
+    property var stripe_errors: ({
+        "invalid_mode": __locale === "Zh" ? "不支持的条纹编码设置。" : "Unsupported stripe encoding settings.",
+        "invalid_size": __locale === "Zh" ? "图像尺寸必须大于零，裁剪尺寸不能超过原图。" : "Image dimensions must be positive and the crop must fit inside the image.",
+        "invalid_shift": __locale === "Zh" ? "相移次数必须大于等于 3。" : "At least 3 phase shifts are required.",
+        "invalid_cycles": __locale === "Zh" ? "周期数必须大于零，且不能超过条纹方向的像素数。" : "The period count must be positive and fit within the stripe axis.",
+        "odd_shift": __locale === "Zh" ? "分区四灰度编码要求相移次数为大于等于 3 的奇数，例如 3、5、7。" : "Interzone four-grayscale encoding requires an odd phase-shift count of at least 3 (3, 5, 7, ...).",
+        "four_gray_cycles": __locale === "Zh" ? "分区四灰度编码的周期数必须为 4 的正整数次幂，例如 4、16、64。" : "Interzone four-grayscale encoding requires 4, 16, 64, ... periods.",
+        "gray_cycles": __locale === "Zh" ? "格雷码周期数必须为 2 的幂且至少为 2；互补格雷码还需每周期至少 2 个像素。" : "Gray-code periods must be a power of 2 (at least 2); complementary Gray code also needs at least 2 pixels per period.",
+        "heterodyne_cycles": __locale === "Zh" ? "三频外差编码的周期数必须大于 11。" : "Three-frequency heterodyne encoding requires more than 11 periods.",
+        "generation_failed": __locale === "Zh" ? "条纹生成失败，请检查编码方式、参数及运行日志。" : "Stripe generation failed. Check the encoding method, parameters and application log."
+    })
     property string settings
     property string locale
     property string about
@@ -806,6 +817,6 @@ QtObject {
     }
 
     Component.onCompleted: {
-        __locale = "En";
+        __locale = "Zh";
     }
 }

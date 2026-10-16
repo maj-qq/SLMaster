@@ -37,7 +37,7 @@ FluContentPage{
             const list = [
                 {
                     title: leftKey,
-                    leftKey,
+                    key: "left",
                 }
             ];
             return list;
@@ -109,7 +109,7 @@ FluContentPage{
                             }
 
                             onCurrentNodeChanged: {
-                                if(!currentNode) {
+                                if(!currentNode || currentNode.depth === 0) {
                                     return;
                                 }
 
@@ -133,7 +133,7 @@ FluContentPage{
                             }
 
                             onItemPressed: (mouse)=>{
-                                if(!currentNode) {
+                                if(!currentNode || currentNode.depth === 0) {
                                     return;
                                 }
 

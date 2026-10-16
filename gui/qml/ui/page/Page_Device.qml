@@ -614,6 +614,13 @@ FluContentPage{
                                 }
 
                                 FluText {
+                                    Layout.fillWidth: true
+                                    visible: root.stripe_type === AppType.InterzoneSinusFourGrayscale
+                                    text: Lang.stripe_errors.odd_shift
+                                    wrapMode: Text.Wrap
+                                }
+
+                                FluText {
                                     text: Lang.defocus_encoding
                                     font: FluTextStyle.BodyStrong
                                 }
@@ -748,8 +755,9 @@ FluContentPage{
                                                 id: shift_time_spbox
                                                 editable: true
                                                 value: root.shiftTime
-                                                from: 0
+                                                from: 3
                                                 to: 9999999
+                                                stepSize: root.stripe_type === AppType.InterzoneSinusFourGrayscale ? 2 : 1
 
                                                 onValueChanged: {
                                                     root.shiftTime = value;
@@ -796,6 +804,9 @@ FluContentPage{
 
                                         onClicked: {
                                             var num_of_stripes = CameraEngine.createStripe(root.pixel_depth, root.stripe_direction, root.stripe_type, root.defocus_encoding, root.img_width, root.img_height, root.clip_width, root.clip_height, root.cycles, root.shiftTime, root.isKeepAdd);
+                                            if (num_of_stripes <= 0) {
+                                                return;
+                                            }
                                             stripe_index_indicator.pageCurrent = 1;
                                             CameraEngine.displayStripe(1);
                                             root.enableBurningStripe = true;
@@ -871,6 +882,10 @@ FluContentPage{
 
             Connections {
                 target: CameraEngine
+
+                function onStripeGenerationFailed(errorCode) {
+                    showError(Lang.stripe_errors[errorCode] || Lang.stripe_errors.generation_failed);
+                }
 
                 function onStripeImgsChanged(num) {
                     stripe_index_indicator.itemCount = num * stripe_index_indicator.pageButtonCount;

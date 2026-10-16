@@ -17,6 +17,7 @@ Item {
     property int topPadding: 0
     property int pageMode: FluNavigationViewType.Stack
     readonly property int currentIndex: nav_list.currentIndex
+    readonly property bool navigationPanelVisible: d.enableNavigationPanel
     property FluMenu navItemRightMenu
     property FluMenu navItemExpanderRightMenu
     property int navCompactWidth: 50
@@ -695,8 +696,6 @@ Item {
             spacing: 0
             FluIconButton{
                 id:btn_back
-                //hide it.
-                visible: false
                 iconSource: FluentIcons.ChromeBack
                 Layout.leftMargin: 5
                 Layout.alignment: Qt.AlignVCenter
@@ -747,9 +746,7 @@ Item {
                 onClicked: {
                     d.enableNavigationPanel = !d.enableNavigationPanel
                 }
-                //visible: opacity
-                //hide it
-                visible: false
+                visible: opacity
                 opacity: d.isMinimal
                 Behavior on opacity{
                     enabled: FluTheme.enableAnimation && d.animDisabled

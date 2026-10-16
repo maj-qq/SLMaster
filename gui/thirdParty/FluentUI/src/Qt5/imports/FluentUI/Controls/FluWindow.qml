@@ -15,6 +15,7 @@ Window {
     property Component loadingItem: com_loading
     property bool fitsAppBarWindows: false
     property bool fillBackground: true
+    property real backgroundHeaderHeight: 80
     property Item appBar: FluAppBar {
         title: window.title
         width: window.width
@@ -119,7 +120,7 @@ Window {
         anchors.left: parent.left
         anchors.top: parent.top
         anchors.right: parent.right
-        height: fillBackground ? parent.height : 80
+        height: fillBackground ? parent.height : backgroundHeaderHeight
         sourceComponent: background
     }
 

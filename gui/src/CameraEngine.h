@@ -114,6 +114,7 @@ class CameraEngine : public QObject {
         return orderTableRecord_;
     }
   signals:
+    void stripeGenerationFailed(const QString &errorCode);
     void stripeImgsChanged(const int num);
     void frameCaptured();
 

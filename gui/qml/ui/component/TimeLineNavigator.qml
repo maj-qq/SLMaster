@@ -34,7 +34,6 @@ Item {
         TimePoint {
             id: device_point
             functionName: Lang.device
-            statusText: Lang.device
 
             onCheckStateChanged: {
                 item.curPage = AppType.Device;
@@ -45,7 +44,6 @@ Item {
         TimePoint {
             id: calibration_point
             functionName: Lang.calibration
-            statusText: Lang.calibration
 
             onCheckStateChanged: {
                 item.curPage = AppType.Calibration;
@@ -56,7 +54,6 @@ Item {
         TimePoint {
             id: scan_mode_point
             functionName: Lang.scan_mode
-            statusText: Lang.scan_mode
 
             onCheckStateChanged: {
                 item.curPage = AppType.ScanMode;
@@ -67,7 +64,6 @@ Item {
         TimePoint {
             id: scan_point
             functionName: Lang.scan
-            statusText: Lang.scan
 
             onCheckStateChanged: {
                 item.curPage = AppType.Scan;
@@ -78,7 +74,6 @@ Item {
         TimePoint {
             id: post_process_point
             functionName: Lang.post_process
-            statusText: Lang.post_process
 
             onCheckStateChanged: {
                 item.curPage = AppType.PostProcess;
@@ -89,7 +84,6 @@ Item {
         TimePoint {
             id: postPocessOutPut_point
             functionName: Lang.post_process_output
-            statusText: Lang.post_process_output
 
             onCheckStateChanged: {
                 item.curPage = AppType.PostProcessOutput;
@@ -108,10 +102,10 @@ Item {
     }
 
     Rectangle {
-        anchors.top: layout.bottom
+        anchors.verticalCenter: layout.bottom
+        anchors.verticalCenterOffset: -14
         width: parent.width
-        anchors.topMargin: -3
-        height: 6
+        height: 4
         color: FluTheme.dark ? Qt.rgba(1,1,1,1) : Qt.rgba(50/255,50/255,50/255,1)
     }
 }

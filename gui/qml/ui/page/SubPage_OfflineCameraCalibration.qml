@@ -38,11 +38,11 @@ FluContentPage{
             const list = [
                 {
                     title: leftKey,
-                    leftKey,
+                    key: "left",
                 },
                 {
                     title: rightKey,
-                    rightKey,
+                    key: "right",
                 },
             ];
             return list;
@@ -123,17 +123,17 @@ FluContentPage{
                             }
 
                             onCurrentNodeChanged: {
-                                if(!currentNode) {
+                                if(!currentNode || currentNode.depth === 0) {
                                     return;
                                 }
 
                                 if(currentNode.title !== "Left Camera" && currentNode.title !== "Right Camera") {
                                     if(stripe_index_indicator.pageCurrent === 1) {
-                                        var path = currentNode.parent.title === "Left Camera" ? left_camera_model.curFolderPath() + "/" + currentNode.title : right_camera_model.curFolderPath() + "/" + currentNode.title;
+                                        var path = currentNode.parent.key === "left" ? left_camera_model.curFolderPath() + "/" + currentNode.title : right_camera_model.curFolderPath() + "/" + currentNode.title;
                                         CalibrateEngine.updateDisplayImg(path);
                                     }
                                     else if(stripe_index_indicator.pageCurrent === 2) {
-                                        var errors = CalibrateEngine.updateErrorDistribute(currentNode.title, currentNode.parent.title === "Left Camera");
+                                        var errors = CalibrateEngine.updateErrorDistribute(currentNode.title, currentNode.parent.key === "left");
                                         var errorDistributes = [];
                                         for(var i = 0; i < errors.length; ++i) {
                                             errorDistributes[i] = {x: errors[i].x, y: errors[i].y};
@@ -148,7 +148,7 @@ FluContentPage{
                             }
 
                             onItemPressed: (mouse)=>{
-                                if(!currentNode) {
+                                if(!currentNode || currentNode.depth === 0) {
                                     return;
                                 }
 
@@ -164,7 +164,7 @@ FluContentPage{
                                 Action {
                                     text: Lang.remove
                                     onTriggered: {
-                                        if(tree_view.currentNode.parent.title === "Left Camera") {
+                                        if(tree_view.currentNode.parent.key === "left") {
                                             CalibrateEngine.removeCameraImg(tree_view.currentNode.title, true);
                                             left_camera_model.erase(tree_view.currentNode.title);
                                             updateImgPaths(left_camera_model.imgPaths(), 0);
@@ -180,14 +180,14 @@ FluContentPage{
                                 Action {
                                     text: Lang.sequenceInverse
                                     onTriggered: {
-                                        CalibrateEngine.invFeatureSequence(tree_view.currentNode.title, tree_view.currentNode.parent.title === "Left Camera");
+                                        CalibrateEngine.invFeatureSequence(tree_view.currentNode.title, tree_view.currentNode.parent.key === "left");
                                     }
                                 }
 
                                 Action {
                                     text: Lang.horizonVerticalInv
                                     onTriggered: {
-                                        CalibrateEngine.invFeatureHVSequence(tree_view.currentNode.title, tree_view.currentNode.parent.title === "Left Camera");
+                                        CalibrateEngine.invFeatureHVSequence(tree_view.currentNode.title, tree_view.currentNode.parent.key === "left");
                                     }
                                 }
                             }

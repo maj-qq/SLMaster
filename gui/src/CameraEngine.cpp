@@ -66,8 +66,53 @@ int CameraEngine::createStripe(const int pixelDepth, const int direction,
                                const int imgWidth, const int imgHeight,
                                const int clipWidth, const int clipHeight,
                                const int cycles, const int shiftTime,
-                               const bool isKeepAdd) {
+                               const bool isKeepAdd) try {
     qInfo() << "start create stripe...";
+
+    const auto fail = [this](const char *code) {
+        qWarning() << "Stripe generation rejected:" << code;
+        emit stripeGenerationFailed(QString::fromLatin1(code));
+        return -1;
+    };
+    if (pixelDepth < AppType::OneBit || pixelDepth > AppType::EightBit ||
+        direction < AppType::Horizion || direction > AppType::Vertical ||
+        stripeType < AppType::SinusCompleGrayCode ||
+        stripeType > AppType::InterzoneSinusFourGrayscale ||
+        defocusMethod < AppType::Disable ||
+        defocusMethod > AppType::OptimalPlusWithModulation) {
+        return fail("invalid_mode");
+    }
+    if (imgWidth <= 0 || imgHeight <= 0 || clipWidth <= 0 || clipHeight <= 0 ||
+        clipWidth > imgWidth || clipHeight > imgHeight) {
+        return fail("invalid_size");
+    }
+    if (shiftTime < 3) {
+        return fail("invalid_shift");
+    }
+    const int stripeAxis = direction == AppType::Horizion ? imgHeight : imgWidth;
+    if (cycles <= 0 || cycles > stripeAxis) {
+        return fail("invalid_cycles");
+    }
+    if (stripeType == AppType::InterzoneSinusFourGrayscale) {
+        if (shiftTime % 2 == 0) {
+            return fail("odd_shift");
+        }
+        int periods = cycles;
+        while (periods > 1 && periods % 4 == 0) {
+            periods /= 4;
+        }
+        if (cycles < 4 || periods != 1) {
+            return fail("four_gray_cycles");
+        }
+    } else if (stripeType == AppType::SinusCompleGrayCode ||
+               stripeType == AppType::SinusShiftGrayCode) {
+        if (cycles < 2 || (cycles & (cycles - 1)) != 0 ||
+            (stripeType == AppType::SinusCompleGrayCode && cycles > stripeAxis / 2)) {
+            return fail("gray_cycles");
+        }
+    } else if (stripeType == AppType::ThreeFrequencyHeterodyne && cycles <= 11) {
+        return fail("heterodyne_cycles");
+    }
 
     int sinusImgsCount = 0;
     std::shared_ptr<Pattern> pattern;
@@ -136,7 +181,9 @@ int CameraEngine::createStripe(const int pixelDepth, const int direction,
     }
 
     std::vector<cv::Mat> imgs;
-    pattern->generate(imgs);
+    if (!pattern || !pattern->generate(imgs) || imgs.empty()) {
+        return fail("generation_failed");
+    }
 
     if (defocusMethod != AppType::DefocusEncoding::Disable) {
         defocusStripeCreate(imgs, direction, cycles, sinusImgsCount, shiftTime,
@@ -162,7 +209,7 @@ int CameraEngine::createStripe(const int pixelDepth, const int direction,
                 auto imgPtr = imgs[i].ptr(j);
                 for (int k = 0; k < clipWidth; ++k) {
                     formatType == QImage::Format_Mono
-                        ? tempStripes[i].setPixel(k, j, imgPtr[k])
+                        ? tempStripes[i].setPixel(k, j, imgPtr[k] ? 1 : 0)
                         : tempStripes[i].setPixel(
                               k, j, qRgb(imgPtr[k], imgPtr[k], imgPtr[k]));
                 }
@@ -185,6 +232,14 @@ int CameraEngine::createStripe(const int pixelDepth, const int direction,
 
     emit stripeImgsChanged(stripeImgs_.size());
     return stripeImgs_.size();
+} catch (const cv::Exception &error) {
+    qWarning() << "Stripe generation failed:" << error.what();
+    emit stripeGenerationFailed(QStringLiteral("generation_failed"));
+    return -1;
+} catch (const std::exception &error) {
+    qWarning() << "Stripe generation failed:" << error.what();
+    emit stripeGenerationFailed(QStringLiteral("generation_failed"));
+    return -1;
 }
 
 void CameraEngine::defocusStripeCreate(std::vector<cv::Mat> &imgs,
@@ -299,6 +354,10 @@ void CameraEngine::switchTrigMode(const bool isTrigLine,
 }
 
 void CameraEngine::displayStripe(const int stripeIndex) {
+    if (!stripePaintItem_ || stripeIndex < 1 ||
+        static_cast<size_t>(stripeIndex) > stripeImgs_.size()) {
+        return;
+    }
     qInfo() << QString("start display stripe: %1").arg(stripeIndex);
     QImage img = stripeImgs_[stripeIndex - 1];
     stripePaintItem_->updateImage(img);

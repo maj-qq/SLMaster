@@ -14,13 +14,14 @@ import "../component"
 
 FluWindow {
     id: window
-    width: 1280
-    height: 680
+    width: 1369
+    height: 792
     minimumWidth: 520
     minimumHeight: 200
     title: "SLMasterGui"
     launchMode: FluWindowType.SingleTask
     fitsAppBarWindows: true
+    backgroundHeaderHeight: window.appBar.height + timeline_nav.height
 
     Component.onCompleted: {
         JSONListModel.query = "$.camera.algorithm[*]";
@@ -92,7 +93,7 @@ FluWindow {
 
     FluNavigationView {
         id: nav_view
-        z: 1
+        z: navigationPanelVisible ? 1 : 0
         width: parent.width
         height: parent.height
         appBarHeight: window.appBar.height
@@ -149,7 +150,6 @@ FluWindow {
         onCurPageChanged: {
             if(curPage == 3 || curPage == 5) {
                 window.fillBackground = false;
-                window.fillBackgroundChanged();
 
                 var indexItem = curPage == 3 ? 0 : 1;
                 if(GlobalSignals.render_items[indexItem] !== undefined) {
@@ -158,7 +158,6 @@ FluWindow {
             }
             else {
                 window.fillBackground = true;
-                window.fillBackgroundChanged();
             }
 
             if (nav_view.getCurrentIndex() !== curPage) {

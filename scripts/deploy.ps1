@@ -1,18 +1,42 @@
-param([string]$QtRoot)
+param(
+    [string]$QtRoot,
+    [string]$BuildDirectory,
+    [string]$Executable,
+    [ValidateSet('Debug', 'Release', 'RelWithDebInfo', 'MinSizeRel')]
+    [string]$Configuration
+)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $dependencyRoot = Join-Path $projectRoot '.deps'
-if (!$QtRoot) { $QtRoot = Join-Path $dependencyRoot 'Qt\6.8.3\msvc2022_64' }
+if (!$QtRoot) { $QtRoot = Join-Path $dependencyRoot 'Qt\5.15.2\msvc2019_64' }
+if (!$BuildDirectory) { $BuildDirectory = Join-Path $projectRoot 'build' }
+$cachePath = Join-Path $BuildDirectory 'CMakeCache.txt'
+if (!$Configuration) {
+    $buildType = Select-String -LiteralPath $cachePath -Pattern '^CMAKE_BUILD_TYPE:[^=]+=(.+)$'
+    if (!$buildType) { throw 'Pass -Configuration for a multi-configuration build.' }
+    $Configuration = $buildType.Matches[0].Groups[1].Value
+}
+if (!$Executable) { $Executable = Join-Path $BuildDirectory 'gui\SLMasterGui.exe' }
+$executable = (Resolve-Path -LiteralPath $Executable).Path
+$outputRoot = Split-Path $executable -Parent
+$qtConfiguration = if ($Configuration -eq 'Debug') { '--debug' } else { '--release' }
 . (Join-Path $PSScriptRoot 'msvc-env.ps1')
-$outputRoot = Join-Path $projectRoot 'build\gui'
-$executable = Join-Path $outputRoot 'SLMasterGui.exe'
 $env:PATH = "$QtRoot\bin;$env:PATH"
+$deployLog = Join-Path $dependencyRoot "deploy-$Configuration.log"
 $ErrorActionPreference = 'Continue'
-& "$QtRoot\bin\windeployqt.exe" --release --no-translations --no-compiler-runtime --qmldir "$projectRoot\gui\qml" --qmlimport "$projectRoot\build" $executable *> "$dependencyRoot\deploy.log"
+& "$QtRoot\bin\windeployqt.exe" $qtConfiguration --no-translations --no-compiler-runtime --qmldir "$projectRoot\gui\qml" --qmlimport "$projectRoot\gui\thirdParty\FluentUI\src\Qt5\imports" $executable *> $deployLog
 $deployExit = $LASTEXITCODE
 $ErrorActionPreference = 'Stop'
-if ($deployExit -ne 0) { Get-Content "$dependencyRoot\deploy.log" -Tail 20; throw 'Qt deployment failed.' }
-Copy-Item -LiteralPath "$QtRoot\qml\Qt5Compat" -Destination $outputRoot -Recurse -Force
+if ($deployExit -ne 0) { Get-Content -LiteralPath $deployLog -Tail 20; throw 'Qt deployment failed.' }
+# Static FluentUI registers its types in main.cpp and has no plugin DLL.
+# Its source qmldir also supports dynamic builds, so adapt the deployed copy.
+$fluentQmldir = Join-Path $outputRoot 'FluentUI\qmldir'
+if ((Select-String -LiteralPath $cachePath -Pattern '^FLUENTUI_BUILD_STATIC_LIB:BOOL=ON$' -Quiet) -and (Test-Path -LiteralPath $fluentQmldir)) {
+    $fluentModule = [IO.File]::ReadAllText($fluentQmldir)
+    $fluentModule = [regex]::Replace($fluentModule, '(?m)^plugin\s+fluentuiplugin[^\r\n]*\r?\n?', '')
+    [IO.File]::WriteAllText($fluentQmldir, $fluentModule, (New-Object System.Text.UTF8Encoding($false)))
+}
+Copy-Item -LiteralPath "$QtRoot\qml\QtGraphicalEffects" -Destination $outputRoot -Recurse -Force
 Copy-Item -LiteralPath "$projectRoot\src\device\projector\module\projector_dlpc_api\third_party\cyusbserial\cyusbserial.dll" -Destination $outputRoot -Force
 # GenICam loads this logging backend dynamically, so dumpbin cannot discover it.
 Copy-Item -LiteralPath "$dependencyRoot\sdk-runtime\executable\gui\log4cpp_MD_VC120_v3_0.dll" -Destination $outputRoot -Force
@@ -20,7 +44,7 @@ Copy-Item -LiteralPath "$dependencyRoot\sdk-runtime\executable\gui\SDKLOG_defaul
 
 $searchRoots = @(
     "$dependencyRoot\msvc\VC\Redist",
-    "$dependencyRoot\vtk-qt6-install\bin",
+    "$dependencyRoot\vtk-qt-install\bin",
     "$dependencyRoot\opencv-install\x64\vc17\bin",
     "$QtRoot\bin", "$dependencyRoot\PCL\bin", "$dependencyRoot\PCL\3rdParty",
     "$dependencyRoot\sdk-runtime"
@@ -59,4 +83,4 @@ while ($queue.Count) {
         }
     }
 }
-Write-Host "Ready: $executable"
+Write-Host "Ready ($Configuration): $executable"

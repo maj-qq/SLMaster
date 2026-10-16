@@ -4,6 +4,7 @@
 #include <QQuickWindow>
 #include <QDir>
 #include <QFile>
+#include <FramelessHelper/Quick/framelesshelperquick_global.h>
 
 #include "AppType.h"
 #include "ImagePaintItem.h"
@@ -34,6 +35,7 @@ Q_IMPORT_QML_PLUGIN(FluentUIPlugin)
 int main(int argc, char *argv[])
 {
     logger::setUp("SLMasterGui");
+    FRAMELESSHELPER_PREPEND_NAMESPACE(FramelessHelperQuickInitialize)();
 #if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
     QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QGuiApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
@@ -41,7 +43,11 @@ int main(int argc, char *argv[])
     QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 #endif
 #endif
-    qputenv("QT_QUICK_CONTROLS_STYLE","Basic");
+#if (QT_VERSION < QT_VERSION_CHECK(6, 0, 0))
+    qputenv("QT_QUICK_CONTROLS_STYLE", "Default");
+#else
+    qputenv("QT_QUICK_CONTROLS_STYLE", "Basic");
+#endif
     // The application reads its bundled JSON models with XMLHttpRequest.
     qputenv("QML_XHR_ALLOW_FILE_READ", "1");
     QGuiApplication::setOrganizationName("Evans Liu");

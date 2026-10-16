@@ -9,7 +9,10 @@ set(VTK_SOURCE_DIR "" CACHE PATH "VTK source matching the installed binary packa
 list(APPEND CMAKE_MODULE_PATH "${VTK_SOURCE_DIR}/CMake")
 include(GNUInstallDirs)
 include(vtkModuleTesting)
-set(VTK_QT_VERSION 6 CACHE STRING "Qt major version")
+set(VTK_QT_VERSION 5 CACHE STRING "Qt major version")
+if(WIN32)
+    set(CMAKE_DEBUG_POSTFIX "-gd")
+endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_INSTALL_QMLDIR "qml")
@@ -33,7 +36,12 @@ vtk_module_build(
     TEST_DIRECTORY_NAME NONE)
 target_include_directories(GUISupportQt PRIVATE "${VTK_SOURCE_DIR}/Rendering/OpenGL2")
 
+set(qt_components Widgets OpenGL Quick Qml)
+if(VTK_QT_VERSION GREATER_EQUAL 6)
+    list(APPEND qt_components OpenGLWidgets)
+endif()
+string(JOIN " " qt_components ${qt_components})
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/SLMasterVTKQtConfig.cmake"
-    "include(CMakeFindDependencyMacro)\nfind_dependency(VTK 9.3)\nfind_dependency(Qt${VTK_QT_VERSION} COMPONENTS Widgets OpenGL OpenGLWidgets Quick Qml)\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/SLMasterVTKQt-targets.cmake\")\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/SLMasterVTKQt-vtk-module-properties.cmake\")\n")
+    "include(CMakeFindDependencyMacro)\nfind_dependency(VTK 9.3)\nfind_dependency(Qt${VTK_QT_VERSION} COMPONENTS ${qt_components})\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/SLMasterVTKQt-targets.cmake\")\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/SLMasterVTKQt-vtk-module-properties.cmake\")\n")
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/SLMasterVTKQtConfig.cmake"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/SLMasterVTKQt")

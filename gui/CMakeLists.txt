@@ -1,5 +1,8 @@
 project(SLMasterGui)
 
+find_package(QT NAMES Qt5 REQUIRED COMPONENTS Core Gui Quick Qml QuickControls2)
+find_package(Qt5 5.15 REQUIRED COMPONENTS Core Gui Quick Qml QuickControls2)
+
 add_subdirectory(thirdParty/FluentUI)
 add_subdirectory(thirdParty/QuickQanava)
 
@@ -7,8 +10,6 @@ find_package(VTK REQUIRED)
 if(NOT TARGET VTK::GUISupportQtQuick)
     find_package(SLMasterVTKQt REQUIRED)
 endif()
-find_package(QT NAMES Qt5 Qt6 REQUIRED COMPONENTS Core Gui Quick Qml QuickControls2)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Quick Qml QuickControls2)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -42,3 +43,19 @@ vtk_module_autoinit(
   TARGETS SLMasterGui
   MODULES ${VTK_LIBRARIES}
 )
+
+if(WIN32 AND MSVC)
+    get_target_property(_qt_qmake Qt5::qmake IMPORTED_LOCATION)
+    get_filename_component(_qt_bin "${_qt_qmake}" DIRECTORY)
+    get_filename_component(_qt_root "${_qt_bin}" DIRECTORY)
+    set(_deploy_script "${PROJECT_SOURCE_DIR}/../scripts/deploy.ps1")
+    set_property(TARGET SLMasterGui APPEND PROPERTY LINK_DEPENDS "${_deploy_script}")
+    add_custom_command(TARGET SLMasterGui POST_BUILD
+        COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${_deploy_script}"
+            -QtRoot "${_qt_root}"
+            -BuildDirectory "${CMAKE_BINARY_DIR}"
+            -Executable "$<TARGET_FILE:SLMasterGui>"
+            -Configuration "$<CONFIG>"
+        COMMENT "Deploying Qt and runtime dependencies for $<CONFIG>"
+        VERBATIM)
+endif()

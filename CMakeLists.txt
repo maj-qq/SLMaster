@@ -9,6 +9,8 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build configuration" FORCE)
 endif()
 if(MSVC)
+    # Qt and PCL provide separate Debug runtimes; keep the application ABI in sync.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     add_compile_options(/utf-8)
 endif()
 

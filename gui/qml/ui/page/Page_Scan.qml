@@ -24,6 +24,7 @@ FluContentPage {
     property int cur_exposure_time: CameraEngine.getNumberAttribute("Exposure Time")
     property int filter_threshod: CameraEngine.getNumberAttribute("Contrast Threshold")
     property bool enable_gpu: CameraEngine.getBooleanAttribute("Gpu Accelerate")
+    property string pendingSavePath: ""
 
     function updateParams() {
         root.cur_method = CameraEngine.getNumberAttribute("Pattern");
@@ -526,6 +527,7 @@ FluContentPage {
                 Layout.alignment: Qt.AlignHCenter
                 iconSource: FluentIcons.Save
                 iconSize: 28
+                enabled: !VTKProcessEngine.savingCloud
 
                 onClicked: {
                     saveFolderDialog.open();
@@ -540,13 +542,26 @@ FluContentPage {
         nameFilters: ["Ply files (*.ply)", "Pcd files (*.pcd)"]
 
         onAccepted: {
-            VTKProcessEngine.saveCloud(currentFile.toString());
-            CameraEngine.saveFrame(currentFile.toString());
+            root.pendingSavePath = currentFile.toString();
+            VTKProcessEngine.saveCloud(root.pendingSavePath);
         }
     }
 
     Connections {
         target: VTKProcessEngine
+
+        function onCloudSaveFinished(path, error) {
+            if (path !== root.pendingSavePath)
+                return;
+            root.pendingSavePath = "";
+            if (error.length > 0) {
+                showError(qsTr("点云保存失败：%1").arg(error), 8000);
+            } else if (!CameraEngine.saveFrame(path)) {
+                showWarning(qsTr("点云已保存，但纹理图或深度图保存失败，请查看日志。"), 8000);
+            } else {
+                showSuccess(Lang.save_sucess, 3000);
+            }
+        }
 
         function onPointInfoChanged(x, y, z) {
             showSuccess("Point Loc: " + x.toString() + ", " + y.toString() + ", " + z.toString(), 3000);

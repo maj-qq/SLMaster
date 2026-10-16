@@ -13,6 +13,7 @@ FluContentPage{
     id: root
     title: ""
     launchMode: FluPageType.SingleInstance
+    property string pendingSavePath: ""
 
     topPadding: 65
     leftPadding: 0
@@ -237,6 +238,7 @@ FluContentPage{
                 Layout.alignment: Qt.AlignHCenter
                 iconSource: FluentIcons.Save
                 iconSize: 28
+                enabled: !VTKProcessEngine.savingCloud
 
                 onClicked: {
                     saveFolderDialog.open();
@@ -251,7 +253,21 @@ FluContentPage{
         nameFilters: ["Ply files (*.ply)", "Pcd files (*.pcd)"]
 
         onAccepted: {
-            VTKProcessEngine.saveCloud(currentFile.toString());
+            root.pendingSavePath = currentFile.toString();
+            VTKProcessEngine.saveCloud(root.pendingSavePath);
+        }
+    }
+
+    Connections {
+        target: VTKProcessEngine
+        function onCloudSaveFinished(path, error) {
+            if (path !== root.pendingSavePath)
+                return;
+            root.pendingSavePath = "";
+            if (error.length > 0)
+                showError(qsTr("点云保存失败：%1").arg(error), 8000);
+            else
+                showSuccess(Lang.save_sucess, 3000);
         }
     }
 

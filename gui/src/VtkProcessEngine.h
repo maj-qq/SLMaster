@@ -34,6 +34,7 @@
 class VTKProcessEngine : public QObject {
     Q_OBJECT
     Q_PROPERTY(float progressVal READ progressVal NOTIFY progressValChanged)
+    Q_PROPERTY(bool savingCloud READ savingCloud NOTIFY savingCloudChanged)
     Q_PROPERTY(int pointSize READ pointSize NOTIFY pointSizeChanged FINAL)
     Q_PROPERTY(int postProcessPointSize READ postProcessPointSize NOTIFY postProcessPointSizeChanged FINAL)
 public:
@@ -50,6 +51,7 @@ public:
     Q_INVOKABLE void clip(const bool isClipInner);
     Q_INVOKABLE void cancelClip();
     Q_INVOKABLE void saveCloud(const QString path);
+    bool savingCloud() const { return savingCloud_; }
     Q_INVOKABLE void enableAxes(const bool isEnable);
     Q_INVOKABLE void enableGrid(const bool isEnable);
     Q_INVOKABLE void enableOriention(const bool isEnable);
@@ -75,6 +77,8 @@ public:
     Q_INVOKABLE void emplaceRenderCloud(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud);
     void renderCloud();
 signals:
+    void savingCloudChanged();
+    void cloudSaveFinished(const QString &path, const QString &error);
     void progressValChanged();
     void paintRectangle();
     void pointInfoChanged(const float x, const float y, const float z);
@@ -82,6 +86,7 @@ signals:
     void postProcessPointSizeChanged();
     void postProcessOutput();
 private:
+    void finishCloudSave(const QString &path, const QString &error);
     void passCloudToMapper();
     void initRenderItem(VTKRenderItem* item, const bool isPostProcess);
     void initOrientedWidget(VTKRenderItem* item, const bool isPostProcess);
@@ -115,6 +120,8 @@ private:
     vtkNew<vtkActor> processmesh_;
     vtkNew<vtkScalarBarActor> processScalarBar_;
     std::thread asyncThread_;
+    std::thread cloudSaveThread_;
+    bool savingCloud_ = false;
     std::thread passCloudToMapperThread_;
     std::atomic_bool vtkExit_;
     QSharedPointer<QTimer> timer_;

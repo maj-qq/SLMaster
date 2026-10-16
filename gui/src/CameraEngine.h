@@ -13,6 +13,7 @@
 #define __CAMERA_ENGINE_H_
 
 #include <thread>
+#include <mutex>
 #include <vector>
 
 
@@ -146,6 +147,7 @@ class CameraEngine : public QObject {
     CameraModel *rightCamModel_ = nullptr;
     CameraModel *colorCamModel_ = nullptr;
     slmaster::cameras::FrameData frame_;
+    std::mutex frameMutex_;
     std::thread test_thread_;
     std::atomic_bool appExit_;
     std::atomic_bool isProject_;

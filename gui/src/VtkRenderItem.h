@@ -27,7 +27,7 @@ public:
     VTKRenderItem();
     ~VTKRenderItem() = default;
     template<class F, class... Args>
-    std::future<void>& pushCommandToQueue(F&& f, Args&&... args)
+    std::future<typename std::result_of<F(Args...)>::type> pushCommandToQueue(F&& f, Args&&... args)
     {
         using return_type = typename std::result_of<F(Args...)>::type;
 

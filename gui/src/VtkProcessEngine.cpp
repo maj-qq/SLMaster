@@ -1,6 +1,14 @@
 #include "VtkProcessEngine.h"
 #include "VtkCusInteractorStyleRubberBandPick.h"
 
+#include <cmath>
+#include <QDebug>
+#include <QFileInfo>
+#include <QSaveFile>
+#include <QUrl>
+#include <sstream>
+#include <stdexcept>
+
 #include <QQuickVTKInteractiveWidget.h>
 #include <QQuickVTKInteractorAdapter.h>
 #include <vtkAreaPicker.h>
@@ -45,6 +53,9 @@
 
 
 #include <pcl/PolygonMesh.h>
+#include <pcl/conversions.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/io/ply_io.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/kdtree/io.h>
 #include <pcl/kdtree/kdtree_flann.h>
@@ -58,12 +69,6 @@ vtkNew<vtkActor> tempActor;
 vtkNew<vtkLookupTable> lookupPre;
 const double axesActor_length = 100.0;
 const int16_t axesActor_label_font_size = 20;
-
-void progressValCallbackFunc(vtkObject *obj, unsigned long eid,
-                             void *clientdata, void *calldata) {
-    double *progressVal = static_cast<double *>(clientdata);
-    *progressVal = *(static_cast<double *>(calldata));
-}
 
 void createLine(const double x1, const double y1, const double z1,
                 const double x2, const double y2, const double z2,
@@ -289,7 +294,7 @@ void VTKProcessEngine::enableOriention(const bool isEnable) {
 
 VTKProcessEngine::VTKProcessEngine()
     : pointSize_(0), postProcessPointSize_(0), vtkExit_(false),
-      postProcessRenderItem_(nullptr), scanRenderItem_(nullptr) {
+      postProcessRenderItem_(nullptr), scanRenderItem_(nullptr), curItem_(nullptr) {
     passCloudToMapperThread_ =
         std::thread(&VTKProcessEngine::passCloudToMapper, this);
 
@@ -335,6 +340,7 @@ VTKProcessEngine::VTKProcessEngine()
 }
 
 VTKProcessEngine::~VTKProcessEngine() {
+    release();
     vtkExit_.store(true, std::memory_order_release);
 
     if (passCloudToMapperThread_.joinable()) {
@@ -401,6 +407,10 @@ void VTKProcessEngine::emplaceRenderCloud(
 }
 
 void VTKProcessEngine::renderCloud() {
+    if (!curItem_) {
+        return;
+    }
+
     vtkSmartPointer<vtkMapper> mapper;
 
     if (!waitRenderedMappers_.try_pop(mapper)) {
@@ -419,12 +429,58 @@ void VTKProcessEngine::renderCloud() {
     std::cout << "Mapper Size: " << waitRenderedMappers_.size() << std::endl;
 
     // 在渲染流程中进行操作，否则易出现内存泄露或上下文获取失败
-    curItem_->pushCommandToQueue([&, mapper] {
+    // Keep the destination fixed until this command runs on the render thread.
+    auto item = curItem_;
+    const bool isPostProcess = item == postProcessRenderItem_;
+    item->pushCommandToQueue([this, item, mapper, isPostProcess] {
         vtkSmartPointer<vtkActor> curCloud =
-            curItem_ == postProcessRenderItem_ ? processCloud_ : cloud_;
+            isPostProcess ? processCloud_ : cloud_;
         vtkSmartPointer<vtkScalarBarActor> curScalarBar =
-            curItem_ == postProcessRenderItem_ ? processScalarBar_ : scalarBar_;
+            isPostProcess ? processScalarBar_ : scalarBar_;
+        const bool firstCloud = !curCloud->GetMapper() ||
+            curCloud->GetMapper()->GetInput()->GetNumberOfPoints() == 0;
         curCloud->SetMapper(mapper);
+
+        if (mapper->GetInput()->GetNumberOfPoints() > 0) {
+            double bounds[6];
+            curCloud->GetBounds(bounds);
+            bool validBounds = true;
+            for (int axis = 0; axis < 3; ++axis) {
+                validBounds = validBounds && std::isfinite(bounds[2 * axis]) &&
+                    std::isfinite(bounds[2 * axis + 1]) &&
+                    bounds[2 * axis] <= bounds[2 * axis + 1];
+            }
+            if (validBounds) {
+                // The initial camera fits the origin/grid, not the reconstructed
+                // object in camera coordinates. Fit the first cloud only, so
+                // subsequent frames preserve the user's rotation and zoom.
+                if (firstCloud) {
+                    if (!isPostProcess) {
+                        // Camera-coordinate clouds do not lie on the world's
+                        // Z-up floor. Keep the small orientation widget, while
+                        // hiding the large origin guides that obscure scans.
+                        axesActor_->VisibilityOff();
+                        gridActor_->VisibilityOff();
+                        // Reconstruction uses camera coordinates: +Y points
+                        // down the image and +Z points towards the object.
+                        // Start from the capturing camera's side, with image
+                        // up matching screen up, rather than the Z-up grid view.
+                        double center[3] = {
+                            (bounds[0] + bounds[1]) * 0.5,
+                            (bounds[2] + bounds[3]) * 0.5,
+                            (bounds[4] + bounds[5]) * 0.5};
+                        auto camera = item->renderer()->GetActiveCamera();
+                        camera->SetFocalPoint(center);
+                        camera->SetPosition(center[0], center[1], bounds[4] - 1.0);
+                        camera->SetViewUp(0.0, -1.0, 0.0);
+                    }
+                    item->renderer()->ResetCamera(bounds);
+                    qInfo() << "Point cloud camera fitted:" << bounds[0] << bounds[1]
+                            << bounds[2] << bounds[3] << bounds[4] << bounds[5];
+                }
+                item->renderer()->ResetCameraClippingRange(bounds);
+            }
+        }
         vtkNew<vtkLookupTable> zLookUpTable;
         zLookUpTable->SetNumberOfTableValues(10);
         zLookUpTable->SetHueRange(0.67, 0.0);
@@ -434,13 +490,15 @@ void VTKProcessEngine::renderCloud() {
         curScalarBar->SetLookupTable(zLookUpTable);
 
         vtkSmartPointer<vtkScalarBarActor> curScalarBarActor =
-            curItem_ == postProcessRenderItem_ ? processScalarBar_ : scalarBar_;
-        if (curScalarBarActor->GetVisibility()) {
+            isPostProcess ? processScalarBar_ : scalarBar_;
+        if (curScalarBarActor->GetVisibility() && item == curItem_) {
             jetDepthColorMap();
         }
 
-        curItem_->update();
+        item->update();
     });
+    // Scheduling the command alone does not trigger QQuickVTKRenderItem::sync().
+    item->update();
 }
 
 void VTKProcessEngine::setCurRenderItem(VTKRenderItem *item) {
@@ -466,56 +524,107 @@ void VTKProcessEngine::enableAreaSelected(const bool isEnable) {
 void VTKProcessEngine::updateSelectedRec() { emit paintRectangle(); }
 
 void VTKProcessEngine::saveCloud(const QString path) {
-    vtkSmartPointer<vtkActor> curCloud =
-        curItem_ == postProcessRenderItem_ ? processCloud_ : cloud_;
-    if (!curCloud->GetMapper()) {
+    if (savingCloud_) {
         return;
     }
-
-    if (asyncThread_.joinable()) {
-        asyncThread_.join();
+    const QUrl url(path);
+    const QString filePath = url.isLocalFile() ? url.toLocalFile() : path;
+    const QString format = QFileInfo(filePath).suffix().toLower();
+    if (!QFileInfo(filePath).isAbsolute() ||
+        (format != "ply" && format != "pcd")) {
+        emit cloudSaveFinished(path, tr("Please choose a local .ply or .pcd file."));
+        return;
     }
-
-    asyncThread_ = std::thread([&, path, curCloud] {
-        double progressVal;
-
-        std::thread saveThread = std::thread([&] {
-            vtkNew<vtkDataSetSurfaceFilter> surfaceFilter;
-            surfaceFilter->SetInputData(curCloud->GetMapper()->GetInput());
-            surfaceFilter->Update();
-
-            auto lookup = vtkLookupTable::SafeDownCast(
-                curCloud->GetMapper()->GetLookupTable());
-
-            vtkNew<vtkPLYWriter> writer;
-            writer->SetFileName(
-                path.mid(8).toLocal8Bit().toStdString().c_str());
-            writer->SetInputData(surfaceFilter->GetOutput());
-            writer->SetLookupTable(lookup);
-            writer->SetArrayName("colorTable");
-            writer->SetFileTypeToASCII();
-
-            vtkNew<vtkCallbackCommand> progressCommand;
-            progressCommand->SetCallback(progressValCallbackFunc);
-            progressCommand->SetClientData(&progressVal);
-            writer->AddObserver(vtkCommand::ProgressEvent, progressCommand);
-
-            writer->Update();
-        });
-
-        while (progressVal < 1) {
-            progressVal_ = progressVal;
-            emit progressValChanged();
-            std::this_thread::sleep_for(std::chrono::milliseconds(300));
-        }
-
-        progressVal_ = 1;
-        emit progressValChanged();
-
-        if (saveThread.joinable()) {
-            saveThread.join();
+    auto item = curItem_;
+    if (!item) {
+        emit cloudSaveFinished(path, tr("No point cloud to save."));
+        return;
+    }
+    savingCloud_ = true;
+    progressVal_ = 0;
+    emit savingCloudChanged();
+    emit progressValChanged();
+    const bool isPostProcess = item == postProcessRenderItem_;
+    // Copy the displayed data during render synchronization. File writers must
+    // never access a live mapper while rendering or a new scan replaces it.
+    item->pushCommandToQueue([this, path, filePath, format, isPostProcess] {
+        try {
+            vtkActor *actor = isPostProcess ? processCloud_.GetPointer() : cloud_.GetPointer();
+            auto mapper = actor->GetMapper();
+            auto input = mapper ? mapper->GetInput() : nullptr;
+            if (!input || input->GetNumberOfPoints() == 0) {
+                throw std::runtime_error("No point cloud to save.");
+            }
+            auto snapshot = std::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
+            snapshot->resize(static_cast<size_t>(input->GetNumberOfPoints()));
+            auto colors = mapper->GetScalarVisibility() ? mapper->MapScalars(1.0) : nullptr;
+            double actorColor[3];
+            actor->GetProperty()->GetColor(actorColor);
+            for (vtkIdType i = 0; i < input->GetNumberOfPoints(); ++i) {
+                double position[3];
+                input->GetPoint(i, position);
+                auto &point = (*snapshot)[static_cast<size_t>(i)];
+                point.x = static_cast<float>(position[0]);
+                point.y = static_cast<float>(position[1]);
+                point.z = static_cast<float>(position[2]);
+                const bool hasColor = colors && colors->GetNumberOfTuples() == input->GetNumberOfPoints() &&
+                    colors->GetNumberOfComponents() >= 3;
+                point.r = hasColor ? static_cast<uint8_t>(colors->GetComponent(i, 0)) : static_cast<uint8_t>(actorColor[0] * 255);
+                point.g = hasColor ? static_cast<uint8_t>(colors->GetComponent(i, 1)) : static_cast<uint8_t>(actorColor[1] * 255);
+                point.b = hasColor ? static_cast<uint8_t>(colors->GetComponent(i, 2)) : static_cast<uint8_t>(actorColor[2] * 255);
+            }
+            QMetaObject::invokeMethod(this, [this, snapshot, path, filePath, format] {
+                if (cloudSaveThread_.joinable()) {
+                    cloudSaveThread_.join();
+                }
+                cloudSaveThread_ = std::thread([this, snapshot, path, filePath, format] {
+                    QString error;
+                    try {
+                        pcl::PCLPointCloud2 data;
+                        pcl::toPCLPointCloud2(*snapshot, data);
+                        std::ostringstream buffer(std::ios::out | std::ios::binary);
+                        const int result = format == "pcd"
+                            ? pcl::PCDWriter().writeBinary(buffer, data)
+                            : pcl::PLYWriter().writeBinary(buffer, data);
+                        if (result < 0 || !buffer) {
+                            throw std::runtime_error("Point cloud encoding failed.");
+                        }
+                        const std::string bytes = buffer.str();
+                        QSaveFile file(filePath);
+                        if (!file.open(QIODevice::WriteOnly) ||
+                            file.write(bytes.data(), static_cast<qint64>(bytes.size())) != static_cast<qint64>(bytes.size()) ||
+                            !file.commit()) {
+                            error = file.errorString();
+                        }
+                    } catch (const std::exception &exception) {
+                        error = QString::fromUtf8(exception.what());
+                    }
+                    QMetaObject::invokeMethod(this, [this, path, error] {
+                        finishCloudSave(path, error);
+                    }, Qt::QueuedConnection);
+                });
+            }, Qt::QueuedConnection);
+        } catch (const std::exception &exception) {
+            const QString error = QString::fromUtf8(exception.what());
+            QMetaObject::invokeMethod(this, [this, path, error] {
+                finishCloudSave(path, error);
+            }, Qt::QueuedConnection);
         }
     });
+    item->update();
+}
+
+void VTKProcessEngine::finishCloudSave(const QString &path, const QString &error) {
+    savingCloud_ = false;
+    progressVal_ = error.isEmpty() ? 1 : 0;
+    emit savingCloudChanged();
+    emit progressValChanged();
+    if (error.isEmpty()) {
+        qInfo() << "Point cloud saved:" << path;
+    } else {
+        qWarning() << "Point cloud save failed:" << path << error;
+    }
+    emit cloudSaveFinished(path, error);
 }
 
 void VTKProcessEngine::clip(const bool isClipInner) {
@@ -585,6 +694,9 @@ void VTKProcessEngine::enablePointInfo(const bool isEnable) {
 }
 
 void VTKProcessEngine::release() {
+    if (cloudSaveThread_.joinable()) {
+        cloudSaveThread_.join();
+    }
     if (asyncThread_.joinable()) {
         asyncThread_.join();
     }

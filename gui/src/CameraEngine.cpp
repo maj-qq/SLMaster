@@ -3,6 +3,10 @@
 
 #include <QDebug>
 #include <QString>
+#include <QDir>
+#include <QFileInfo>
+#include <QSaveFile>
+#include <QUrl>
 
 #include <Eigen/Eigen>
 #include <opencv2/core/eigen.hpp>
@@ -609,7 +613,12 @@ void CameraEngine::startScan() {
         }
 
         auto slCamera = getSLCamera();
-        slCamera->offlineCapture(imgs, frame_);
+        FrameData capturedFrame;
+        slCamera->offlineCapture(imgs, capturedFrame);
+        {
+            std::lock_guard<std::mutex> lock(frameMutex_);
+            frame_ = std::move(capturedFrame);
+        }
         scanTexturePaintItem_->updateImage(
             QImage(frame_.textureMap_.data, frame_.textureMap_.cols,
                    frame_.textureMap_.rows, frame_.textureMap_.step,
@@ -618,7 +627,12 @@ void CameraEngine::startScan() {
     } else if (scanMode_ == AppType::ScanModeType::Static) {
         workThread_ = std::thread([&] {
             auto slCamera = getSLCamera();
-            if (slCamera->capture(frame_)) {
+            FrameData capturedFrame;
+            if (slCamera->capture(capturedFrame)) {
+                {
+                    std::lock_guard<std::mutex> lock(frameMutex_);
+                    frame_ = std::move(capturedFrame);
+                }
                 scanTexturePaintItem_->updateImage(
                     QImage(frame_.textureMap_.data, frame_.textureMap_.cols,
                            frame_.textureMap_.rows, frame_.textureMap_.step,
@@ -651,7 +665,12 @@ void CameraEngine::continuesScan() {
     workThread_ = std::thread([&] {
         auto renderLastTime = std::chrono::steady_clock::now();
         while (!isContinusStop_.load(std::memory_order_acquire)) {
-            if (frameDatasQueue_.try_pop(frame_)) {
+            FrameData capturedFrame;
+            if (frameDatasQueue_.try_pop(capturedFrame)) {
+                {
+                    std::lock_guard<std::mutex> lock(frameMutex_);
+                    frame_ = std::move(capturedFrame);
+                }
                 if (std::chrono::duration<double>(
                         std::chrono::steady_clock::now() - renderLastTime)
                         .count() > 0.035) {
@@ -1225,13 +1244,42 @@ void CameraEngine::tenLine() {
     workThread_ = std::thread(&CameraEngine::createTenLine, this);
 }
 
-bool CameraEngine::saveFrame(const QString &path) {
-    auto fileName = path.mid(8, path.size() - 12);
-
-    qDebug() << QString("save frame, frame path is : %1").arg(fileName);
-
-    cv::imwrite(fileName.toStdString() + ".bmp", frame_.textureMap_);
-    cv::imwrite(fileName.toStdString() + ".tiff", frame_.depthMap_);
-
-    return true;
+bool CameraEngine::saveFrame(const QString &path) try {
+    const QUrl url(path);
+    const QFileInfo info(url.isLocalFile() ? url.toLocalFile() : path);
+    cv::Mat textureMap, depthMap;
+    {
+        std::lock_guard<std::mutex> lock(frameMutex_);
+        textureMap = frame_.textureMap_.clone();
+        depthMap = frame_.depthMap_.clone();
+    }
+    if (!info.isAbsolute() || textureMap.empty() || depthMap.empty()) {
+        qWarning() << "No scan frame or invalid save path:" << path;
+        return false;
+    }
+    // Encode before writing either file, including the lossless float depth map.
+    // Qt handles Unicode paths; OpenCV's narrow filename API does not on Windows.
+    std::vector<uchar> texture, depth;
+    if (!cv::imencode(".bmp", textureMap, texture) ||
+        !cv::imencode(".tiff", depthMap, depth)) {
+        return false;
+    }
+    const QString base = info.dir().filePath(info.completeBaseName());
+    const auto writeImage = [](const QString &fileName, const std::vector<uchar> &bytes) {
+        QSaveFile file(fileName);
+        if (!file.open(QIODevice::WriteOnly) ||
+            file.write(reinterpret_cast<const char *>(bytes.data()), static_cast<qint64>(bytes.size())) != static_cast<qint64>(bytes.size()) ||
+            !file.commit()) {
+            qWarning() << "Scan image save failed:" << fileName << file.errorString();
+            return false;
+        }
+        return true;
+    };
+    return writeImage(base + ".bmp", texture) && writeImage(base + ".tiff", depth);
+} catch (const cv::Exception &exception) {
+    qWarning() << "Scan frame encoding failed:" << exception.what();
+    return false;
+} catch (const std::exception &exception) {
+    qWarning() << "Scan frame save failed:" << exception.what();
+    return false;
 }

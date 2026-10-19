@@ -20,6 +20,7 @@
 #include <QSGNode>
 #include <QSGSimpleRectNode>
 #include <QSGSimpleTextureNode>
+#include <mutex>
 
 class ImagePaintItem : public QQuickItem {
     Q_OBJECT
@@ -38,6 +39,7 @@ class ImagePaintItem : public QQuickItem {
     void render();
     bool hasRendered_;
     QImage imageThumb_;
+    std::mutex imageMutex_;
     std::atomic_bool isRendererFinished_;
 };
 

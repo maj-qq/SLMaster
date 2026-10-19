@@ -13,15 +13,23 @@
 using namespace pcl;
 using namespace Eigen;
 
-Vector3f calcLineIntersectionPoint(ModelCoefficientsPtr lineA, ModelCoefficientsPtr lineB) {
-    Vector3f crossPoint;
-
-    float t = (lineB->values[3] * (lineA->values[1] - lineB->values[1]) - lineB->values[4] * (lineA->values[0] - lineB->values[0])) / (lineA->values[3] * lineB->values[4] - lineA->values[4] * lineB->values[3]);
-    crossPoint(0) = lineA->values[0] + lineA->values[3] * t;
-    crossPoint(1) = lineA->values[1] + lineA->values[4] * t;
-    crossPoint(2) = lineA->values[2] + lineA->values[5] * t;
-
-    return crossPoint;
+bool calcLineIntersectionPoint(const ModelCoefficientsPtr &lineA,
+                               const ModelCoefficientsPtr &lineB,
+                               Vector3f &crossPoint) {
+    if (!lineA || !lineB || lineA->values.size() < 6 || lineB->values.size() < 6)
+        return false;
+    const Vector3f p(lineA->values[0], lineA->values[1], lineA->values[2]);
+    const Vector3f q(lineB->values[0], lineB->values[1], lineB->values[2]);
+    const Vector3f u(lineA->values[3], lineA->values[4], lineA->values[5]);
+    const Vector3f v(lineB->values[3], lineB->values[4], lineB->values[5]);
+    const float a = u.dot(u), b = u.dot(v), c = v.dot(v);
+    const float denominator = a * c - b * b;
+    if (std::abs(denominator) < 1e-12f) return false;
+    const Vector3f w = p - q;
+    const float t = (b * v.dot(w) - c * u.dot(w)) / denominator;
+    const float s = (a * v.dot(w) - b * u.dot(w)) / denominator;
+    crossPoint = (p + t * u + q + s * v) * 0.5f;
+    return crossPoint.allFinite();
 }
 
 QQmlComponent* ThreeLineIntersectionLineNode::delegate(QQmlEngine& engine) noexcept
@@ -42,20 +50,13 @@ void ThreeLineIntersectionLineNode::inNodeOutputChanged()
 {
     FlowNode::inNodeOutputChanged();
 
-    if(workThread_.joinable()) {
-        workThread_.join();
-    }
-
-    workThread_ = std::thread([&]{
+    const auto inputs = inputOutputs();
+    const double length = length_, width = width_, height = height_;
+    startWorker(workThread_, [this, inputs, length, width, height]{
         std::vector<ModelCoefficientsPtr> lines;
-        for (const auto inNode : get_in_nodes()) {
-            const auto inFlowNode = qobject_cast<FlowNode*>(inNode);
-            if (inFlowNode == nullptr ||
-                !inFlowNode->getOutput().isValid())
-                continue;
-
-            auto inOutput = inFlowNode->getOutput().value<ModelCoefficientsPtr>();
-            if (inOutput) {
+        for (const auto &input : inputs) {
+            auto inOutput = input.value<ModelCoefficientsPtr>();
+            if (inOutput && inOutput->values.size() >= 6) {
                 lines.emplace_back(inOutput);
             }
             else {
@@ -64,14 +65,15 @@ void ThreeLineIntersectionLineNode::inNodeOutputChanged()
         }
         
         if(lines.size() == 3) {
-            auto crossPoint = calcLineIntersectionPoint(lines[0], lines[1]);
+            Vector3f crossPoint;
+            if (!calcLineIntersectionPoint(lines[0], lines[1], crossPoint)) return;
             Eigen::Vector3f direcLength, direcWidth, direcHeight;
             direcLength << lines[0]->values[3], lines[0]->values[4], lines[0]->values[5];
             direcWidth << lines[1]->values[3], lines[1]->values[4], lines[1]->values[5];
             direcHeight << lines[2]->values[3], lines[2]->values[4], lines[2]->values[5];
-            Eigen::Vector3f posLengthEnd = crossPoint + length_ * direcLength;
-            Eigen::Vector3f posWidthEnd = crossPoint + width_ * direcWidth;
-            Eigen::Vector3f posHeightEnd = crossPoint + height_ * direcHeight;
+            Eigen::Vector3f posLengthEnd = crossPoint + length * direcLength;
+            Eigen::Vector3f posWidthEnd = crossPoint + width * direcWidth;
+            Eigen::Vector3f posHeightEnd = crossPoint + height * direcHeight;
         
             vtkNew<vtkPoints> points;
             points->InsertNextPoint(crossPoint(0), crossPoint(1), crossPoint(2));

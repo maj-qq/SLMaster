@@ -24,29 +24,23 @@ void SACSegmentNode::inNodeOutputChanged()
 {
     FlowNode::inNodeOutputChanged();
 
-    if(workThread_.joinable()) {
-        workThread_.join();
-    }
-
-    workThread_ = std::thread([&]{
+    const auto inputs = inputOutputs();
+    const int modelType = modelType_, methodType = methodType_;
+    const double threshold = distanceThreshold_;
+    startWorker(workThread_, [this, inputs, modelType, methodType, threshold]{
         PointCloud<PointXYZRGB>::Ptr modelCloud(new PointCloud<PointXYZRGB>);
         PointCloud<PointXYZRGB>::Ptr remainCloud(new PointCloud<PointXYZRGB>);
         PointIndicesPtr indices(new PointIndices);
         ModelCoefficientsPtr models(new ModelCoefficients);
 
-        for (const auto inNode : get_in_nodes()) {
-            const auto inFlowNode = qobject_cast<FlowNode*>(inNode);
-            if (inFlowNode == nullptr ||
-                !inFlowNode->getOutput().isValid())
-                continue;
-
-            auto inOutput = inFlowNode->getOutput().value<PointCloud<PointXYZRGB>::Ptr>();
-            if (!inOutput->empty()) {
+        for (const auto &input : inputs) {
+            auto inOutput = input.value<PointCloud<PointXYZRGB>::Ptr>();
+            if (inOutput && !inOutput->empty()) {
                 SACSegmentation<PointXYZRGB> segmentTool;
                 segmentTool.setOptimizeCoefficients(true);
-                segmentTool.setModelType(modelType_);
-                segmentTool.setMethodType(methodType_);
-                segmentTool.setDistanceThreshold(distanceThreshold_);
+                segmentTool.setModelType(modelType);
+                segmentTool.setMethodType(methodType);
+                segmentTool.setDistanceThreshold(threshold);
                 segmentTool.setInputCloud(inOutput);
                 segmentTool.segment(*indices, *models);
                 

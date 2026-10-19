@@ -14,6 +14,7 @@
 
 #include <future>
 #include <queue>
+#include <mutex>
 
 #include <QQuickVTKRenderItem.h>
 #include <QQuickVTKRenderWindow.h>
@@ -37,6 +38,7 @@ public:
 
         std::future<return_type> res = task->get_future();
         {
+            std::lock_guard<std::mutex> lock(commandMutex_);
             commandQueue_.emplace([task]() { (*task)(); });
         }
         return res;
@@ -48,6 +50,7 @@ public slots:
     void sync() override;
 private:
     std::queue<std::function<void()>> commandQueue_;
+    std::mutex commandMutex_;
 };
 
 #endif //__VTK_RENDER_ITEM_H_

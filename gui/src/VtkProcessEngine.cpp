@@ -356,6 +356,8 @@ void VTKProcessEngine::passCloudToMapper() {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }
+        if (!cloud) continue;
+        try {
 
         const int pointSize = cloud->points.size();
 
@@ -396,11 +398,15 @@ void VTKProcessEngine::passCloudToMapper() {
         mapper->SetScalarRange(0, pointSize - 1);
 
         waitRenderedMappers_.push(mapper);
+        } catch (const std::exception &error) {
+            qWarning() << "Cloud rendering conversion failed:" << error.what();
+        }
     }
 }
 
 void VTKProcessEngine::emplaceRenderCloud(
     const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud) {
+    if (!cloud) return;
     waitRenderedClouds_.push(cloud);
 
     std::cout << "Cloud Size: " << waitRenderedClouds_.size() << std::endl;
@@ -513,12 +519,17 @@ void VTKProcessEngine::enableColorBar(const bool isEnable) {
 }
 
 void VTKProcessEngine::enableAreaSelected(const bool isEnable) {
-    auto style = static_cast<vtkCusInteractorStyleRubberBandPick *>(
-        curItem_->renderWindow()
-            ->renderWindow()
-            ->GetInteractor()
-            ->GetInteractorStyle());
-    isEnable ? style->StartSelect() : style->stopSelect();
+    auto item = curItem_;
+    if (!item) return;
+    item->pushCommandToQueue([item, isEnable] {
+        auto style = dynamic_cast<vtkCusInteractorStyleRubberBandPick *>(
+            item->renderWindow()->renderWindow()->GetInteractor()->GetInteractorStyle());
+        if (style) {
+            if (isEnable) style->StartSelect();
+            else style->stopSelect();
+        }
+    });
+    item->update();
 }
 
 void VTKProcessEngine::updateSelectedRec() { emit paintRectangle(); }
@@ -628,69 +639,59 @@ void VTKProcessEngine::finishCloudSave(const QString &path, const QString &error
 }
 
 void VTKProcessEngine::clip(const bool isClipInner) {
-    vtkSmartPointer<vtkActor> curCloud =
-        curItem_ == postProcessRenderItem_ ? processCloud_ : cloud_;
-
-    if (!curCloud->GetMapper()) {
-        cancelClip();
-        return;
-    }
-
-    if (asyncThread_.joinable()) {
-        asyncThread_.join();
-    }
-
-    asyncThread_ = std::thread([&, isClipInner] {
+    auto item = curItem_;
+    if (!item) return;
+    vtkSmartPointer<vtkActor> actor =
+        item == postProcessRenderItem_ ? processCloud_ : cloud_;
+    vtkSmartPointer<vtkScalarBarActor> bar =
+        item == postProcessRenderItem_ ? processScalarBar_ : scalarBar_;
+    item->pushCommandToQueue([this, item, actor, bar, isClipInner] {
+        if (!actor->GetMapper()) return;
+        auto style = dynamic_cast<vtkCusInteractorStyleRubberBandPick *>(
+            item->renderWindow()->renderWindow()->GetInteractor()->GetInteractorStyle());
+        if (!style) return;
         double progressVal = 0;
-        std::thread clipThread = std::thread([&] {
-            auto style = static_cast<vtkCusInteractorStyleRubberBandPick *>(
-                curItem_->renderWindow()
-                    ->renderWindow()
-                    ->GetInteractor()
-                    ->GetInteractorStyle());
+        try {
             style->clip(isClipInner, progressVal);
-        });
-
-        while (progressVal < 1) {
-            progressVal_ = progressVal;
-            emit progressValChanged();
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(300));
-        }
-
-        vtkNew<vtkDataSetSurfaceFilter> surfaceFilter;
-        surfaceFilter->SetInputData(cloud_->GetMapper()->GetInput());
-        surfaceFilter->Update();
-
-        vtkLookupTable::SafeDownCast(scalarBar_->GetLookupTable())
-            ->SetTableRange(surfaceFilter->GetOutput()->GetBounds()[4],
-                            surfaceFilter->GetOutput()->GetBounds()[5]);
-
-        progressVal_ = 1;
-        emit progressValChanged();
-
-        if (clipThread.joinable()) {
-            clipThread.join();
+            vtkNew<vtkDataSetSurfaceFilter> surfaceFilter;
+            surfaceFilter->SetInputData(actor->GetMapper()->GetInput());
+            surfaceFilter->Update();
+            auto lookup = vtkLookupTable::SafeDownCast(bar->GetLookupTable());
+            if (lookup && surfaceFilter->GetOutput()->GetNumberOfPoints() > 0) {
+                const double *bounds = surfaceFilter->GetOutput()->GetBounds();
+                lookup->SetTableRange(bounds[4], bounds[5]);
+            }
+            QMetaObject::invokeMethod(this, [this] {
+                progressVal_ = 1;
+                emit progressValChanged();
+            }, Qt::QueuedConnection);
+        } catch (const std::exception &error) {
+            qWarning() << "Cloud clipping failed:" << error.what();
         }
     });
+    item->update();
 }
 
 void VTKProcessEngine::cancelClip() {
-    auto style = static_cast<vtkCusInteractorStyleRubberBandPick *>(
-        curItem_->renderWindow()
-            ->renderWindow()
-            ->GetInteractor()
-            ->GetInteractorStyle());
-    style->cancelClip();
+    auto item = curItem_;
+    if (!item) return;
+    item->pushCommandToQueue([item] {
+        auto style = dynamic_cast<vtkCusInteractorStyleRubberBandPick *>(
+            item->renderWindow()->renderWindow()->GetInteractor()->GetInteractorStyle());
+        if (style) style->cancelClip();
+    });
+    item->update();
 }
 
 void VTKProcessEngine::enablePointInfo(const bool isEnable) {
-    auto style = static_cast<vtkCusInteractorStyleRubberBandPick *>(
-        curItem_->renderWindow()
-            ->renderWindow()
-            ->GetInteractor()
-            ->GetInteractorStyle());
-    style->enablePointInfoMode(isEnable);
+    auto item = curItem_;
+    if (!item) return;
+    item->pushCommandToQueue([item, isEnable] {
+        auto style = dynamic_cast<vtkCusInteractorStyleRubberBandPick *>(
+            item->renderWindow()->renderWindow()->GetInteractor()->GetInteractorStyle());
+        if (style) style->enablePointInfoMode(isEnable);
+    });
+    item->update();
 }
 
 void VTKProcessEngine::release() {
@@ -883,6 +884,7 @@ void VTKProcessEngine::updateProcessActor(vtkSmartPointer<vtkActor> actor) {
 
 void VTKProcessEngine::updateProcessCloud(
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud) {
+    if (!postProcessRenderItem_ || !cloud) return;
     curItem_ = postProcessRenderItem_;
     // 如果点云不为空，则跳转至结果页面
     if (!cloud->empty()) {
@@ -896,6 +898,7 @@ void VTKProcessEngine::updateProcessCloud(
 }
 
 void VTKProcessEngine::updateProcessMesh(pcl::PolygonMesh::Ptr mesh) {
+    if (!postProcessRenderItem_ || !mesh) return;
     curItem_ = postProcessRenderItem_;
 
     if (!mesh->polygons.empty()) {

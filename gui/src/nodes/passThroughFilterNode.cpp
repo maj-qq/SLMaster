@@ -22,42 +22,30 @@ void PassThroughFilterNode::inNodeOutputChanged()
 {
     FlowNode::inNodeOutputChanged();
 
-    if(workThread_.joinable()) {
-        workThread_.join();
-    }
-
-    workThread_ = std::thread([&]{
+    const auto inputs = inputOutputs();
+    const bool filterX = filterX_, filterY = filterY_, filterZ = filterZ_;
+    const double minX = minX_, maxX = maxX_, minY = minY_, maxY = maxY_;
+    const double minZ = minZ_, maxZ = maxZ_;
+    startWorker(workThread_, [this, inputs, filterX, filterY, filterZ,
+                              minX, maxX, minY, maxY, minZ, maxZ]{
         PointCloud<PointXYZRGB>::Ptr outPutCloud(new PointCloud<PointXYZRGB>);
-        for (const auto inNode : get_in_nodes()) {
-            const auto inFlowNode = qobject_cast<FlowNode*>(inNode);
-            if (inFlowNode == nullptr ||
-                !inFlowNode->getOutput().isValid())
-                continue;
-
-            auto inOutput = inFlowNode->getOutput().value<PointCloud<PointXYZRGB>::Ptr>();
-            if (!inOutput->empty()) {
+        for (const auto &input : inputs) {
+            auto inOutput = input.value<PointCloud<PointXYZRGB>::Ptr>();
+            if (inOutput && !inOutput->empty()) {
                 PassThrough<PointXYZRGB> filter;
-
-                if(filterX_) {
-                    filter.setInputCloud(inOutput);
-                    filter.setFilterFieldName("x");
-                    filter.setFilterLimits(minX_, maxX_);
-                    filter.filter(*outPutCloud);
-                }
-
-                if(filterY_) {
-                    outPutCloud->empty() ? filter.setInputCloud(inOutput) : filter.setInputCloud(outPutCloud);
-                    filter.setFilterFieldName("y");
-                    filter.setFilterLimits(minY_, maxY_);
-                    filter.filter(*outPutCloud);
-                }
-
-                if(filterZ_) {
-                    outPutCloud->empty() ? filter.setInputCloud(inOutput) : filter.setInputCloud(outPutCloud);
-                    filter.setFilterFieldName("y");
-                    filter.setFilterLimits(minZ_, maxZ_);
-                    filter.filter(*outPutCloud);
-                }
+                auto current = inOutput;
+                const auto apply = [&](const char *field, double min, double max) {
+                    PointCloud<PointXYZRGB>::Ptr filtered(new PointCloud<PointXYZRGB>);
+                    filter.setInputCloud(current);
+                    filter.setFilterFieldName(field);
+                    filter.setFilterLimits(min, max);
+                    filter.filter(*filtered);
+                    current = filtered;
+                };
+                if (filterX) apply("x", minX, maxX);
+                if (filterY) apply("y", minY, maxY);
+                if (filterZ) apply("z", minZ, maxZ);
+                *outPutCloud += *current;
 
                 qInfo() << "[Pass Through Filter Node]: Completed!";
             }

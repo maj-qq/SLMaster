@@ -29,6 +29,7 @@ void ActorOutputNode::inNodeOutputChanged() {
         auto inOutput = inFlowNode->getOutput().value<vtkSmartPointer< vtkActor>>();
         if(!inOutput) {
             qInfo() << "[Actor Output Node]: actor output node is nullptr!";
+            continue;
         }
 
         VTKProcessEngine::instance()->updateProcessActor(inOutput);

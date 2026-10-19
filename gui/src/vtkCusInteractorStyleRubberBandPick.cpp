@@ -304,11 +304,13 @@ void vtkCusInteractorStyleRubberBandPick::areaPick() {
 }
 
 void vtkCusInteractorStyleRubberBandPick::clip(const bool isClipInner, double& progressVal) {
-    if (!cloudActor_->GetMapper()) {
+    if (!cloudActor_ || !cloudActor_->GetMapper() || !this->Interactor) {
         return;
     }
 
     vtkAreaPicker* areaPicker = vtkAreaPicker::SafeDownCast(this->Interactor->GetPicker());
+    auto mapper = vtkDataSetMapper::SafeDownCast(cloudActor_->GetMapper());
+    if (!areaPicker || !areaPicker->GetFrustum() || !mapper) return;
     vtkNew<vtkClipDataSet> clipper;
     clipper->SetClipFunction(areaPicker->GetFrustum());
     clipper->SetInputData(cloudActor_->GetMapper()->GetInput());
@@ -322,7 +324,7 @@ void vtkCusInteractorStyleRubberBandPick::clip(const bool isClipInner, double& p
 
     clipper->Update();
 
-    vtkDataSetMapper::SafeDownCast(cloudActor_->GetMapper())->SetInputData(clipper->GetOutput());
+    mapper->SetInputData(clipper->GetOutput());
 
     areaSelectedPoints_->VisibilityOff();
 }

@@ -3,6 +3,7 @@
 #include "CameraEngine.h"
 
 #include "pcl/io/ply_io.h"
+#include <QUrl>
 
 using namespace pcl;
 using namespace pcl::io;
@@ -27,11 +28,7 @@ QQmlComponent*  CloudInputNode::delegate(QQmlEngine& engine) noexcept
 }
 
 bool CloudInputNode::readPlyFile(QString path) {
-    if(workThread_.joinable()) {
-        workThread_.join();
-    }
-
-    workThread_ = std::thread([&, path]{
+    startWorker(workThread_, [this, path]{
         if(path != "") {
             PointCloud<PointXYZRGB>::Ptr cloudPtr(new PointCloud<PointXYZRGB>);
             if(0 == loadPLYFile(path.toLocal8Bit().toStdString(), *cloudPtr)) {
@@ -53,7 +50,8 @@ void CloudInputNode::setMode(const CloudInputMode mode) {
 
 void CloudInputNode::setFilePath(const QString& filePath) {
     if(mode_ == CloudInputMode::FromFile) {
-        filePath_ = filePath.mid(8);
+        const QUrl url(filePath);
+        filePath_ = url.isLocalFile() ? url.toLocalFile() : filePath;
         emit filePathChanged(filePath_);
     }
 }
@@ -61,7 +59,8 @@ void CloudInputNode::setFilePath(const QString& filePath) {
 void CloudInputNode::updateSource() {
     if(mode_ == CloudInputMode::FromCamera) {
         auto frame = CameraEngine::instance()->getCurFrame();
-        setOutput(QVariant::fromValue(frame.pointCloud_));
+        if (frame.pointCloud_ && !frame.pointCloud_->empty())
+            setOutput(QVariant::fromValue(frame.pointCloud_));
     }
     else {
         //点云源文件无需更新，仅通过手动选择文件夹更新,因此直接发射信号

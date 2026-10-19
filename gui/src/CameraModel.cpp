@@ -1,4 +1,7 @@
 #include "cameraModel.h"
+#include <QCollator>
+#include <QDir>
+#include <QFileInfo>
 
 CameraModel::CameraModel(QObject *parent) : QAbstractListModel(parent) {
   roleNames_.insert(FileName, "FileName");
@@ -34,76 +37,36 @@ void CameraModel::emplace_back(const QString &imgInfo) {
 }
 
 int CameraModel::erase(const QString &imgInfo) {
+  const int index = imgs_.indexOf(imgInfo);
+  if (index < 0) return -1;
   beginResetModel();
-
-  int index = 0;
-  auto iterator = imgs_.begin();
-  for (; iterator != imgs_.end(); ++iterator) {
-    if (imgInfo == *iterator) {
-      imgs_.erase(iterator);
-      break;
-    }
-    ++index;
-  }
-
+  imgs_.removeAt(index);
   endResetModel();
-
-  if (iterator == imgs_.end() && index != imgs_.size()) return -1;
-
   return index;
 }
 
 void CameraModel::erase(int locIndex) {
+  if (locIndex < 0 || locIndex >= imgs_.size()) return;
   beginResetModel();
-
-  imgs_.erase(imgs_.begin() + locIndex);
-
+  imgs_.removeAt(locIndex);
   endResetModel();
 }
 
 void CameraModel::recurseImg(const QString &folderUrl) {
   beginResetModel();
-
-  auto folderPath = folderUrl.mid(8);
-
-  curFolderPath_ = folderPath;
-
-  std::vector<cv::String> imgPaths;
-  std::vector<std::string> sortPaths;
-  auto stdPath = curFolderPath_.toLocal8Bit().toStdString();
-
-  cv::glob(stdPath + std::string("/*.bmp"), imgPaths);
-
-  if(imgPaths.empty()) {
-    cv::glob(stdPath + std::string("/*.png"), imgPaths);
-  }
-  
-  if(imgPaths.empty()) {
-    cv::glob(stdPath + std::string("/*.jpg"), imgPaths);
-  }
-
-  for (int i = 0; i < imgPaths.size(); ++i) {
-    std::string::size_type iPos = imgPaths[i].find_last_of('\\') + 1;
-    std::string filename = imgPaths[i].substr(iPos, imgPaths[i].length() - iPos);
-    sortPaths.emplace_back(filename);
-  }
-
-  std::sort(sortPaths.begin(), sortPaths.end(), [](std::string a, std::string b) {
-      std::string aName = a.substr(0, a.rfind("."));
-      std::string bName = b.substr(0, b.rfind("."));
-
-      return std::stoi(aName) < std::stoi(bName); }
-    );
-
   imgs_.clear();
-  for (auto &path : sortPaths) {
-    size_t index = path.find_last_of("\\");
-    if(index != -1) {
-        path.replace(index, 1, "/");
-    }
-    imgs_.push_back(QString::fromStdString(path));
-  }
-
+  const QUrl url(folderUrl);
+  curFolderPath_ = url.isLocalFile() ? url.toLocalFile() : folderUrl;
+  QDir dir(curFolderPath_);
+  const auto files = dir.entryInfoList({"*.bmp", "*.png", "*.jpg", "*.jpeg"},
+                                       QDir::Files | QDir::Readable, QDir::NoSort);
+  for (const auto &file : files) imgs_.append(file.fileName());
+  QCollator collator;
+  collator.setNumericMode(true);
+  std::sort(imgs_.begin(), imgs_.end(),
+            [&collator](const QString &a, const QString &b) {
+              return collator.compare(a, b) < 0;
+            });
   endResetModel();
 
   emit updateImgs();

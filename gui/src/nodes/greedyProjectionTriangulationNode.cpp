@@ -26,27 +26,26 @@ void GreedyProjectionTriangulationNode::inNodeOutputChanged()
 {
     FlowNode::inNodeOutputChanged();
 
-    if(workThread_.joinable()) {
-        workThread_.join();
-    }
-
-    workThread_ = std::thread([&]{
+    const auto inputs = inputOutputs();
+    const int kSearch = static_cast<int>(kSearch_);
+    const int maxNeighbors = static_cast<int>(maxNearestNumber_);
+    const double radius = searchRadius_, mu = multiplier_;
+    const double minAngle = minimumAngle_, maxAngle = maximumAngle_;
+    const double maxSurfaceAngle = maximumSurfaceAngle_;
+    const bool normalConsistency = normalConsistency_;
+    startWorker(workThread_, [this, inputs, kSearch, maxNeighbors, radius, mu,
+                              minAngle, maxAngle, maxSurfaceAngle, normalConsistency]{
         PolygonMesh::Ptr mesh(new PolygonMesh);
-        for (const auto inNode : get_in_nodes()) {
-            const auto inFlowNode = qobject_cast<FlowNode*>(inNode);
-            if (inFlowNode == nullptr ||
-                !inFlowNode->getOutput().isValid())
-                continue;
-
-            auto inOutput = inFlowNode->getOutput().value<PointCloud<PointXYZRGB>::Ptr>();
-            if (!inOutput->empty()) {
+        for (const auto &input : inputs) {
+            auto inOutput = input.value<PointCloud<PointXYZRGB>::Ptr>();
+            if (inOutput && !inOutput->empty()) {
                 NormalEstimation<PointXYZRGB, Normal> nes;
                 PointCloud<Normal>::Ptr normals(new PointCloud<Normal>);
                 pcl::search::KdTree<PointXYZRGB>::Ptr kdTree(new pcl::search::KdTree<PointXYZRGB>);
 
                 nes.setInputCloud(inOutput);
                 nes.setSearchMethod(kdTree);
-                nes.setKSearch(kSearch_);
+                nes.setKSearch(kSearch);
                 nes.compute(*normals);
 
                 PointCloud<PointXYZRGBNormal>::Ptr cloud_with_normals(new PointCloud<PointXYZRGBNormal>);
@@ -56,13 +55,13 @@ void GreedyProjectionTriangulationNode::inNodeOutputChanged()
                 kdTree2->setInputCloud(cloud_with_normals);
 
                 GreedyProjectionTriangulation<PointXYZRGBNormal> gp;
-                gp.setSearchRadius(searchRadius_);
-                gp.setMu(multiplier_);
-                gp.setMaximumNearestNeighbors(maxNearestNumber_);
-                gp.setMaximumSurfaceAngle(maximumSurfaceAngle_);
-                gp.setMaximumAngle(maximumAngle_ / 180 * 3.1415926535);
-                gp.setMinimumAngle(minimumAngle_ / 180 * 3.1415926535);
-                gp.setNormalConsistency(normalConsistency_);
+                gp.setSearchRadius(radius);
+                gp.setMu(mu);
+                gp.setMaximumNearestNeighbors(maxNeighbors);
+                gp.setMaximumSurfaceAngle(maxSurfaceAngle);
+                gp.setMaximumAngle(maxAngle / 180 * 3.1415926535);
+                gp.setMinimumAngle(minAngle / 180 * 3.1415926535);
+                gp.setNormalConsistency(normalConsistency);
                 gp.setInputCloud(cloud_with_normals);
                 gp.setSearchMethod(kdTree2);
                 gp.reconstruct(*mesh);

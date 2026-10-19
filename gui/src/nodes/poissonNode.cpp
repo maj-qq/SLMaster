@@ -26,27 +26,26 @@ void PoissonNode::inNodeOutputChanged()
 {
     FlowNode::inNodeOutputChanged();
 
-    if(workThread_.joinable()) {
-        workThread_.join();
-    }
-
-    workThread_ = std::thread([&]{
+    const auto inputs = inputOutputs();
+    const int kSearch = static_cast<int>(kSearch_);
+    const int degree = static_cast<int>(degree_), depth = static_cast<int>(maxDepth_);
+    const int isoDivide = static_cast<int>(isoDivide_);
+    const int solverDivide = static_cast<int>(solverDivide_);
+    const double samples = minSamplePoints_, scale = scale_;
+    const bool confidence = confidence_;
+    startWorker(workThread_, [this, inputs, kSearch, degree, depth, isoDivide,
+                              solverDivide, samples, scale, confidence]{
         PolygonMesh::Ptr mesh(new PolygonMesh);
-        for (const auto inNode : get_in_nodes()) {
-            const auto inFlowNode = qobject_cast<FlowNode*>(inNode);
-            if (inFlowNode == nullptr ||
-                !inFlowNode->getOutput().isValid())
-                continue;
-
-            auto inOutput = inFlowNode->getOutput().value<PointCloud<PointXYZRGB>::Ptr>();
-            if (!inOutput->empty()) {
+        for (const auto &input : inputs) {
+            auto inOutput = input.value<PointCloud<PointXYZRGB>::Ptr>();
+            if (inOutput && !inOutput->empty()) {
                 NormalEstimation<PointXYZRGB, Normal> nes;
                 PointCloud<Normal>::Ptr normals(new PointCloud<Normal>);
                 pcl::search::KdTree<PointXYZRGB>::Ptr kdTree(new pcl::search::KdTree<PointXYZRGB>);
 
                 nes.setInputCloud(inOutput);
                 nes.setSearchMethod(kdTree);
-                nes.setKSearch(kSearch_);
+                nes.setKSearch(kSearch);
                 nes.compute(*normals);
 
                 PointCloud<PointXYZRGBNormal>::Ptr cloud_with_normals(new PointCloud<PointXYZRGBNormal>);
@@ -56,14 +55,14 @@ void PoissonNode::inNodeOutputChanged()
                 kdTree2->setInputCloud(cloud_with_normals);
 
                 Poisson<PointXYZRGBNormal> pn;
-                pn.setConfidence(confidence_);
-                pn.setDegree(degree_);
-                pn.setDepth(maxDepth_);
-                pn.setIsoDivide(isoDivide_);
+                pn.setConfidence(confidence);
+                pn.setDegree(degree);
+                pn.setDepth(depth);
+                pn.setIsoDivide(isoDivide);
                 pn.setOutputPolygons(false);
-                pn.setSamplesPerNode(minSamplePoints_);
-                pn.setScale(scale_);
-                pn.setSolverDivide(solverDivide_);
+                pn.setSamplesPerNode(samples);
+                pn.setScale(scale);
+                pn.setSolverDivide(solverDivide);
                 pn.setInputCloud(cloud_with_normals);
                 pn.setSearchMethod(kdTree2);
                 pn.performReconstruction(*mesh);

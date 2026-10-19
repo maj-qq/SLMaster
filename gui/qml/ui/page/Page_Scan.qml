@@ -41,6 +41,15 @@ FluContentPage {
         }
     }
 
+    Connections {
+        target: CameraEngine
+        function onScanFailed(message) {
+            operation_area.isPlay = false;
+            play_pause_button.color = play_pause_button.normalColor;
+            root.showError(message, 8000);
+        }
+    }
+
     MouseArea {
         id: mouse_area
         anchors.fill: parent

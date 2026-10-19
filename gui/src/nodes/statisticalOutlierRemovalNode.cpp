@@ -22,23 +22,17 @@ void StatisticalOutlierRemovalNode::inNodeOutputChanged()
 {
     FlowNode::inNodeOutputChanged();
 
-    if(workThread_.joinable()) {
-        workThread_.join();
-    }
-
-    workThread_ = std::thread([&]{
+    const auto inputs = inputOutputs();
+    const int k = static_cast<int>(k_);
+    const double threshold = stdThreshold_;
+    startWorker(workThread_, [this, inputs, k, threshold]{
         PointCloud<PointXYZRGB>::Ptr outPutCloud(new PointCloud<PointXYZRGB>);
-        for (const auto inNode : get_in_nodes()) {
-            const auto inFlowNode = qobject_cast<FlowNode*>(inNode);
-            if (inFlowNode == nullptr ||
-                !inFlowNode->getOutput().isValid())
-                continue;
-
-            auto inOutput = inFlowNode->getOutput().value<PointCloud<PointXYZRGB>::Ptr>();
-            if (!inOutput->empty()) {
+        for (const auto &input : inputs) {
+            auto inOutput = input.value<PointCloud<PointXYZRGB>::Ptr>();
+            if (inOutput && !inOutput->empty()) {
                 StatisticalOutlierRemoval<PointXYZRGB> filter;
-                filter.setMeanK(k_);
-                filter.setStddevMulThresh(stdThreshold_);
+                filter.setMeanK(k);
+                filter.setStddevMulThresh(threshold);
                 filter.setInputCloud(inOutput);
                 filter.filter(*outPutCloud);
 

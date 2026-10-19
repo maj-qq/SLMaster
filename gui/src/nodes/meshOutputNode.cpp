@@ -28,8 +28,9 @@ void MeshOutputNode::inNodeOutputChanged() {
             continue;
 
         auto inOutput = inFlowNode->getOutput().value<PolygonMesh::Ptr>();
-        if(inOutput->polygons.empty()) {
+        if (!inOutput || inOutput->polygons.empty()) {
             qInfo() << "[Mesh Output Node]: In node output mesh is empty!";
+            continue;
         }
 
         VTKProcessEngine::instance()->updateProcessMesh(inOutput);

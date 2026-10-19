@@ -78,7 +78,7 @@ class CameraEngine : public QObject {
     Q_INVOKABLE void stepProject();
     Q_INVOKABLE void stopProject();
     Q_INVOKABLE void tenLine();
-    Q_INVOKABLE void startScan();
+    Q_INVOKABLE bool startScan();
     Q_INVOKABLE void continuesScan();
     Q_INVOKABLE void pauseScan();
     Q_INVOKABLE void bindOfflineLeftCamModel(CameraModel *model) {
@@ -103,7 +103,8 @@ class CameraEngine : public QObject {
     Q_INVOKABLE double getNumberAttribute(const QString &attributeName);
     Q_INVOKABLE bool getBooleanAttribute(const QString &attributeName);
     Q_INVOKABLE QString getStringAttribute(const QString &attributeName);
-    Q_INVOKABLE const slmaster::cameras::FrameData &getCurFrame() {
+    slmaster::cameras::FrameData getCurFrame() {
+        std::lock_guard<std::mutex> lock(frameMutex_);
         return frame_;
     }
     Q_INVOKABLE bool saveFrame(const QString &path);
@@ -118,6 +119,7 @@ class CameraEngine : public QObject {
     void stripeGenerationFailed(const QString &errorCode);
     void stripeImgsChanged(const int num);
     void frameCaptured();
+    void scanFailed(const QString &message);
 
   private:
     CameraEngine();
@@ -132,7 +134,7 @@ class CameraEngine : public QObject {
     void switchTrigMode(const bool isTrigLine, const int exposureTime);
     std::vector<OrderTableRecord> orderTableRecord_;
     std::vector<QImage> stripeImgs_;
-    AppType::ScanModeType scanMode_;
+    AppType::ScanModeType scanMode_ = AppType::ScanModeType::Offline;
     AppType::CameraType cameraType_;
     AppType::PatternMethod patternType_;
     static CameraEngine *engine_;

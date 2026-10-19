@@ -15,6 +15,11 @@
 #include "QuickQanava.h"
 
 #include "CloudTypes.h"
+#include <QDebug>
+#include <thread>
+#include <vector>
+#include <exception>
+#include <utility>
 
 class FlowNode : public qan::Node
 {
@@ -60,9 +65,23 @@ class FlowNode : public qan::Node
   public:
     Q_PROPERTY(QVariant output READ getOutput WRITE setOutput NOTIFY outputChanged)
     inline QVariant getOutput() const noexcept { return _output; }
-    void            setOutput(QVariant output) noexcept;
+    void            setOutput(QVariant output);
   protected:
     QVariant        _output;
+    std::vector<QVariant> inputOutputs() const;
+    template <typename Function>
+    void startWorker(std::thread &worker, Function function) {
+        if (worker.joinable()) worker.join();
+        worker = std::thread([function = std::move(function)]() mutable {
+            try {
+                function();
+            } catch (const std::exception &error) {
+                qWarning() << "Post-process failed:" << error.what();
+            } catch (...) {
+                qWarning() << "Post-process failed with an unknown error";
+            }
+        });
+    }
   signals:
     void            outputChanged();
 };

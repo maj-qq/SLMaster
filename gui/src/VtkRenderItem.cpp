@@ -31,11 +31,16 @@ VTKRenderItem::VTKRenderItem() {
 }
 
 void VTKRenderItem::sync() {
-    while(!commandQueue_.empty()){
-            std::function<void()> command = std::move( this->commandQueue_.front() );
-            this->commandQueue_.pop();
-            command();
+    for (;;) {
+        std::function<void()> command;
+        {
+            std::lock_guard<std::mutex> lock(commandMutex_);
+            if (commandQueue_.empty()) break;
+            command = std::move(commandQueue_.front());
+            commandQueue_.pop();
         }
+        command();
+    }
 
     QQuickVTKRenderItem::sync();
 }

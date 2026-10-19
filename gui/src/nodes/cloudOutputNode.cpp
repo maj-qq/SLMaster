@@ -29,8 +29,9 @@ void CloudOutputNode::inNodeOutputChanged() {
             continue;
 
         auto inOutput = inFlowNode->getOutput().value<PointCloud<PointXYZRGB>::Ptr>();
-        if(inOutput->empty()) {
+        if (!inOutput || inOutput->empty()) {
             qInfo() << "[Cloud Output Node]: cloud is empty!";
+            continue;
         }
 
         VTKProcessEngine::instance()->updateProcessCloud(inOutput);

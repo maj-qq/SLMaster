@@ -4,9 +4,11 @@
 #include <QDebug>
 #include <QString>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QSaveFile>
 #include <QUrl>
+#include <stdexcept>
 
 #include <Eigen/Eigen>
 #include <opencv2/core/eigen.hpp>
@@ -24,6 +26,19 @@ CameraEngine *CameraEngine::engine_ = new CameraEngine();
 CameraEngine *CameraEngine::instance() { return engine_; }
 
 static auto lastTime = std::chrono::steady_clock::now();
+
+static QImage scanTextureImage(const cv::Mat &texture) {
+    if (texture.empty()) return {};
+    QImage::Format format;
+    switch (texture.type()) {
+    case CV_8UC1: format = QImage::Format_Grayscale8; break;
+    case CV_8UC3: format = QImage::Format_BGR888; break;
+    case CV_8UC4: format = QImage::Format_ARGB32; break;
+    default: return {};
+    }
+    return QImage(texture.data, texture.cols, texture.rows, texture.step,
+                  format).copy();
+}
 
 CameraEngine::CameraEngine()
     : stripePaintItem_(nullptr), isOnLine_(false), isConnected_(false),
@@ -55,6 +70,7 @@ void CameraEngine::startDetectCameraState() {
 
 CameraEngine::~CameraEngine() {
     appExit_.store(true, std::memory_order_release);
+    isContinusStop_.store(true, std::memory_order_release);
 
     if (onlineDetectThread_.joinable()) {
         onlineDetectThread_.join();
@@ -559,101 +575,150 @@ void CameraEngine::updateDisplayImg(const QString &imgPath) {
     }
 }
 
-void CameraEngine::startScan() {
+bool CameraEngine::startScan() {
     isProject_.store(true, std::memory_order_release);
+    if (!isContinusStop_.exchange(true, std::memory_order_acq_rel)) {
+        try {
+            auto camera = getSLCamera();
+            if (camera) camera->stopContinuesCapture();
+        } catch (const std::exception &error) {
+            isProject_.store(false, std::memory_order_release);
+            emit scanFailed(QString::fromUtf8(error.what()));
+            return false;
+        }
+    }
 
     if (workThread_.joinable()) {
         workThread_.join();
     }
 
     if (scanMode_ == AppType::ScanModeType::Offline) {
-        std::vector<std::vector<cv::Mat>> imgs;
-
-        auto leftImgPaths = leftCamModel_->imgPaths();
-        if (!leftImgPaths.empty()) {
-            std::vector<cv::Mat> leftImgs;
-            for (auto path : leftImgPaths) {
-                auto imgPath = (leftCamModel_->curFolderPath() + "/" + path)
-                                   .toLocal8Bit()
-                                   .toStdString();
-                cv::Mat img = cv::imread(imgPath, 0);
-                leftImgs.emplace_back(img);
-            }
-            imgs.emplace_back(leftImgs);
-        }
-
-        if (cameraType_ != AppType::MonocularSLCamera) {
-            auto rightImgPaths = rightCamModel_->imgPaths();
-            if (!rightImgPaths.empty()) {
-                std::vector<cv::Mat> rightImgs;
-                for (auto path : rightImgPaths) {
-                    auto imgPath =
-                        (rightCamModel_->curFolderPath() + "/" + path)
-                            .toLocal8Bit()
-                            .toStdString();
-                    cv::Mat img = cv::imread(imgPath, 0);
-                    rightImgs.emplace_back(img);
-                }
-                imgs.emplace_back(rightImgs);
-            }
-        }
-
-        auto colorImgPaths = colorCamModel_->imgPaths();
-        if (!colorImgPaths.empty()) {
-            std::vector<cv::Mat> colorImgs;
-            for (auto path : colorImgPaths) {
-                auto imgPath = (colorCamModel_->curFolderPath() + "/" + path)
-                                   .toLocal8Bit()
-                                   .toStdString();
-                cv::Mat img = cv::imread(imgPath, cv::IMREAD_UNCHANGED);
-                colorImgs.emplace_back(img);
-            }
-
-            imgs.emplace_back(colorImgs);
-        }
-
-        auto slCamera = getSLCamera();
-        FrameData capturedFrame;
-        slCamera->offlineCapture(imgs, capturedFrame);
-        {
-            std::lock_guard<std::mutex> lock(frameMutex_);
-            frame_ = std::move(capturedFrame);
-        }
-        scanTexturePaintItem_->updateImage(
-            QImage(frame_.textureMap_.data, frame_.textureMap_.cols,
-                   frame_.textureMap_.rows, frame_.textureMap_.step,
-                   QImage::Format_BGR888));
-        VTKProcessEngine::instance()->emplaceRenderCloud(frame_.pointCloud_);
-    } else if (scanMode_ == AppType::ScanModeType::Static) {
-        workThread_ = std::thread([&] {
+        auto fail = [this](const QString &message) {
+            qWarning() << "Offline scan failed:" << message;
+            isProject_.store(false, std::memory_order_release);
+            emit scanFailed(message);
+            return false;
+        };
+        try {
             auto slCamera = getSLCamera();
+            if (!slCamera || !slCamera->getCaliInfo() || !leftCamModel_ ||
+                !scanTexturePaintItem_)
+                return fail(tr("相机、标定或扫描界面尚未初始化"));
+            const int expected = static_cast<int>(getNumberAttribute("Total Fringes"));
+            const int phaseCount = static_cast<int>(getNumberAttribute("Phase Shift Times"));
+            if (expected <= 0 || phaseCount <= 0 || phaseCount > expected)
+                return fail(tr("条纹数量配置无效"));
+
+            std::vector<std::vector<cv::Mat>> imgs;
+            auto loadGroup = [&](CameraModel *model, int required,
+                                 int imreadFlags, const QString &name) {
+                if (!model) throw std::runtime_error((name + tr("图像列表未初始化")).toUtf8().toStdString());
+                const auto paths = model->imgPaths();
+                if (paths.size() < required)
+                    throw std::runtime_error((name + tr("图像不足：需要 %1 张，当前 %2 张")
+                                              .arg(required).arg(paths.size())).toUtf8().toStdString());
+                std::vector<cv::Mat> group;
+                cv::Size size;
+                for (const auto &path : paths) {
+                    const QString fullPath = QDir(model->curFolderPath()).filePath(path);
+                    QFile file(fullPath);
+                    if (!file.open(QIODevice::ReadOnly))
+                        throw std::runtime_error((tr("无法读取图像：") + fullPath).toUtf8().toStdString());
+                    const QByteArray bytes = file.readAll();
+                    const cv::Mat encoded(1, bytes.size(), CV_8UC1,
+                                          const_cast<char *>(bytes.constData()));
+                    const cv::Mat img = cv::imdecode(encoded, imreadFlags);
+                    if (img.empty())
+                        throw std::runtime_error((tr("无法读取图像：") + fullPath).toUtf8().toStdString());
+                    if (!group.empty() && img.size() != size)
+                        throw std::runtime_error((name + tr("图像尺寸不一致")).toUtf8().toStdString());
+                    size = img.size();
+                    group.push_back(img);
+                }
+                imgs.push_back(std::move(group));
+            };
+            loadGroup(leftCamModel_, expected, cv::IMREAD_GRAYSCALE, tr("左相机"));
+            if (imgs[0].size() != static_cast<size_t>(expected))
+                return fail(tr("左相机图像数量与条纹配置不一致"));
+            if (cameraType_ != AppType::MonocularSLCamera) {
+                loadGroup(rightCamModel_, expected, cv::IMREAD_GRAYSCALE, tr("右相机"));
+                if (imgs[1].size() != static_cast<size_t>(expected))
+                    return fail(tr("左右相机图像数量不一致"));
+            }
+            if (cameraType_ == AppType::TripleSLCamera ||
+                (colorCamModel_ && !colorCamModel_->imgPaths().empty()))
+                loadGroup(colorCamModel_, phaseCount, cv::IMREAD_UNCHANGED, tr("彩色相机"));
             FrameData capturedFrame;
-            if (slCamera->capture(capturedFrame)) {
+            if (!slCamera->offlineCapture(imgs, capturedFrame) ||
+                !capturedFrame.pointCloud_ || capturedFrame.pointCloud_->empty() ||
+                capturedFrame.textureMap_.empty())
+                return fail(tr("离线重建未生成有效点云和纹理"));
+            const cv::Mat texture = capturedFrame.textureMap_;
+            const auto cloud = capturedFrame.pointCloud_;
+            const QImage preview = scanTextureImage(texture);
+            if (preview.isNull()) return fail(tr("纹理图像格式不受支持"));
+            {
+                std::lock_guard<std::mutex> lock(frameMutex_);
+                frame_ = std::move(capturedFrame);
+            }
+            scanTexturePaintItem_->updateImage(preview);
+            VTKProcessEngine::instance()->emplaceRenderCloud(cloud);
+        } catch (const std::exception &error) {
+            return fail(QString::fromUtf8(error.what()));
+        }
+    } else if (scanMode_ == AppType::ScanModeType::Static) {
+        workThread_ = std::thread([this] {
+            try {
+                auto slCamera = getSLCamera();
+                FrameData capturedFrame;
+                if (!slCamera || !slCamera->capture(capturedFrame) ||
+                    !capturedFrame.pointCloud_ || capturedFrame.pointCloud_->empty() ||
+                    capturedFrame.textureMap_.empty()) {
+                    emit scanFailed(tr("相机采集失败或未生成有效扫描数据"));
+                } else {
+                const cv::Mat texture = capturedFrame.textureMap_;
+                const auto cloud = capturedFrame.pointCloud_;
+                const QImage preview = scanTextureImage(texture);
+                if (preview.isNull()) {
+                    emit scanFailed(tr("纹理图像格式不受支持"));
+                    isProject_.store(false, std::memory_order_release);
+                    return;
+                }
                 {
                     std::lock_guard<std::mutex> lock(frameMutex_);
                     frame_ = std::move(capturedFrame);
                 }
-                scanTexturePaintItem_->updateImage(
-                    QImage(frame_.textureMap_.data, frame_.textureMap_.cols,
-                           frame_.textureMap_.rows, frame_.textureMap_.step,
-                           QImage::Format_BGR888));
-                VTKProcessEngine::instance()->emplaceRenderCloud(
-                    frame_.pointCloud_);
+                if (scanTexturePaintItem_)
+                    scanTexturePaintItem_->updateImage(preview);
+                VTKProcessEngine::instance()->emplaceRenderCloud(cloud);
 
                 emit frameCaptured();
 
                 qInfo() << "Capture once sucess.";
-            } else {
-                qWarning() << "Capture once failed.";
+                }
+            } catch (const std::exception &error) {
+                qWarning() << "Capture once failed:" << error.what();
+                emit scanFailed(QString::fromUtf8(error.what()));
             }
+            isProject_.store(false, std::memory_order_release);
         });
+        return true;
     }
 
     isProject_.store(false, std::memory_order_release);
+    return true;
 }
 
 void CameraEngine::continuesScan() {
-    isContinusStop_.store(false, std::memory_order_release);
+    if (!isContinusStop_.exchange(true, std::memory_order_acq_rel)) {
+        try {
+            auto camera = getSLCamera();
+            if (camera) camera->stopContinuesCapture();
+        } catch (const std::exception &error) {
+            emit scanFailed(QString::fromUtf8(error.what()));
+            return;
+        }
+    }
 
     SafeQueue<FrameData> emptyData;
     frameDatasQueue_.swap(emptyData);
@@ -661,8 +726,10 @@ void CameraEngine::continuesScan() {
     if (workThread_.joinable()) {
         workThread_.join();
     }
+    isContinusStop_.store(false, std::memory_order_release);
 
-    workThread_ = std::thread([&] {
+    workThread_ = std::thread([this] {
+        try {
         auto renderLastTime = std::chrono::steady_clock::now();
         while (!isContinusStop_.load(std::memory_order_acquire)) {
             FrameData capturedFrame;
@@ -674,32 +741,48 @@ void CameraEngine::continuesScan() {
                 if (std::chrono::duration<double>(
                         std::chrono::steady_clock::now() - renderLastTime)
                         .count() > 0.035) {
-                    scanTexturePaintItem_->updateImage(
-                        QImage(frame_.textureMap_.data, frame_.textureMap_.cols,
-                               frame_.textureMap_.rows, frame_.textureMap_.step,
-                               QImage::Format_BGR888)
-                            .copy());
-                    VTKProcessEngine::instance()->emplaceRenderCloud(
-                        std::move(frame_.pointCloud_));
+                    if (scanTexturePaintItem_) {
+                        const QImage preview = scanTextureImage(frame_.textureMap_);
+                        if (!preview.isNull()) scanTexturePaintItem_->updateImage(preview);
+                    }
+                    if (frame_.pointCloud_)
+                        VTKProcessEngine::instance()->emplaceRenderCloud(
+                            frame_.pointCloud_);
                     renderLastTime = std::chrono::steady_clock::now();
                 }
             } else {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         }
+        } catch (const std::exception &error) {
+            qWarning() << "Continuous scan failed:" << error.what();
+            emit scanFailed(QString::fromUtf8(error.what()));
+            isContinusStop_.store(true, std::memory_order_release);
+        }
     });
 
-    auto slCamera = getSLCamera();
-    slCamera->continuesCapture(frameDatasQueue_);
+    try {
+        auto slCamera = getSLCamera();
+        if (!slCamera || !slCamera->continuesCapture(frameDatasQueue_)) {
+            isContinusStop_.store(true, std::memory_order_release);
+            emit scanFailed(tr("连续采集启动失败"));
+        }
+    } catch (const std::exception &error) {
+        isContinusStop_.store(true, std::memory_order_release);
+        emit scanFailed(QString::fromUtf8(error.what()));
+    }
 
     // 连续重建不与点云处理流程链接
 }
 
 void CameraEngine::pauseScan() {
-    auto slCamera = getSLCamera();
-    slCamera->stopContinuesCapture();
-
     isContinusStop_.store(true, std::memory_order_release);
+    try {
+        auto slCamera = getSLCamera();
+        if (slCamera) slCamera->stopContinuesCapture();
+    } catch (const std::exception &error) {
+        emit scanFailed(QString::fromUtf8(error.what()));
+    }
 
     if (workThread_.joinable()) {
         workThread_.join();

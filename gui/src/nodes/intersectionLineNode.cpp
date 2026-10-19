@@ -2,37 +2,27 @@
 
 #include <pcl/common/io.h>
 #include <pcl/segmentation/sac_segmentation.h>
+#include <Eigen/Core>
 
 using namespace pcl;
 
-void calcLine(ModelCoefficientsPtr coefsOfPlane1, ModelCoefficientsPtr coefsOfPlane2, ModelCoefficientsPtr coefsOfLine)
-{
-    
-    //方向向量n=n1×n2=(b1*c2-c1*b2,c1*a2-a1*c2,a1*b2-b1*a2)
-    ModelCoefficients temcoefs;
-    double a1, b1, c1, d1, a2,b2, c2, d2;
-    double tempy, tempz;
-    a1= coefsOfPlane1->values[0];
-    b1= coefsOfPlane1->values[1];
-    c1= coefsOfPlane1->values[2];
-    d1= coefsOfPlane1->values[3];
-    a2= coefsOfPlane2->values[0];
-    b2= coefsOfPlane2->values[1];
-    c2= coefsOfPlane2->values[2];
-    d2= coefsOfPlane2->values[3];
-    tempz= -(d1 / b1 - d2 / b2) / (c1 / b1 - c2 / b2);
-    tempy= (-c1 / b1)*tempz - d1 / b1;
-    coefsOfLine->values.push_back(0.0);
-    coefsOfLine->values.push_back(tempy);
-    coefsOfLine->values.push_back(tempz);
-    coefsOfLine->values.push_back(b1*c2 - c1*b2);
-    coefsOfLine->values.push_back(c1*a2 - a1*c2);
-    coefsOfLine->values.push_back(a1*b2 - b1*a2);
-    coefsOfLine->values[3] = coefsOfLine->values[3] / std::sqrt(coefsOfLine->values[3] * coefsOfLine->values[3] + coefsOfLine->values[4] * coefsOfLine->values[4] + coefsOfLine->values[5] * coefsOfLine->values[5]);
-    coefsOfLine->values[4] = coefsOfLine->values[4] / std::sqrt(coefsOfLine->values[3] * coefsOfLine->values[3] + coefsOfLine->values[4] * coefsOfLine->values[4] + coefsOfLine->values[5] * coefsOfLine->values[5]);
-    coefsOfLine->values[5] = coefsOfLine->values[5] / std::sqrt(coefsOfLine->values[3] * coefsOfLine->values[3] + coefsOfLine->values[4] * coefsOfLine->values[4] + coefsOfLine->values[5] * coefsOfLine->values[5]);
+bool calcLine(const ModelCoefficientsPtr &first, const ModelCoefficientsPtr &second,
+              const ModelCoefficientsPtr &line) {
+    if (!first || !second || first->values.size() < 4 || second->values.size() < 4)
+        return false;
+    const Eigen::Vector3f n1(first->values[0], first->values[1], first->values[2]);
+    const Eigen::Vector3f n2(second->values[0], second->values[1], second->values[2]);
+    const Eigen::Vector3f direction = n1.cross(n2);
+    const float squaredNorm = direction.squaredNorm();
+    if (squaredNorm < 1e-12f) return false;
+    const Eigen::Vector3f origin =
+        (second->values[3] * n1 - first->values[3] * n2).cross(direction) /
+        squaredNorm;
+    const Eigen::Vector3f unitDirection = direction.normalized();
+    line->values = {origin.x(), origin.y(), origin.z(),
+                    unitDirection.x(), unitDirection.y(), unitDirection.z()};
+    return true;
 }
-
 QQmlComponent*  IntersectionLineNode::delegate(QQmlEngine& engine) noexcept
 {
     static std::unique_ptr<QQmlComponent> delegate;
@@ -51,21 +41,13 @@ void IntersectionLineNode::inNodeOutputChanged()
 {
     FlowNode::inNodeOutputChanged();
 
-    if(workThread_.joinable()) {
-        workThread_.join();
-    }
-
-    workThread_ = std::thread([&]{
+    const auto inputs = inputOutputs();
+    startWorker(workThread_, [this, inputs]{
         std::vector<PointIndicesPtr> pointIndices;
         std::vector<ModelCoefficientsPtr> modelCoefficients;
-        for (const auto inNode : get_in_nodes()) {
-            const auto inFlowNode = qobject_cast<FlowNode*>(inNode);
-            if (inFlowNode == nullptr ||
-                !inFlowNode->getOutput().isValid())
-                continue;
-
-            auto inOutput = inFlowNode->getOutput().value<PointCloud<PointXYZRGB>::Ptr>();
-            if (!inOutput->empty()) {
+        for (const auto &input : inputs) {
+            auto inOutput = input.value<PointCloud<PointXYZRGB>::Ptr>();
+            if (inOutput && !inOutput->empty()) {
                 SACSegmentation<PointXYZRGB> segmentTool;
                 segmentTool.setOptimizeCoefficients(true);
                 segmentTool.setModelType(SACMODEL_PLANE);
@@ -77,7 +59,8 @@ void IntersectionLineNode::inNodeOutputChanged()
                 ModelCoefficientsPtr coefficients(new ModelCoefficients);
                 segmentTool.segment(*indices, *coefficients);
                 pointIndices.emplace_back(indices);
-                modelCoefficients.emplace_back(coefficients);
+                if (coefficients->values.size() >= 4)
+                    modelCoefficients.emplace_back(coefficients);
             }
             else {
                 qInfo() << "[Intersection Line Node]: cloud is empty!";
@@ -86,9 +69,8 @@ void IntersectionLineNode::inNodeOutputChanged()
         
         if(modelCoefficients.size() == 2) {
             ModelCoefficientsPtr lines(new ModelCoefficients);
-            calcLine(modelCoefficients[0], modelCoefficients[1], lines);
-
-            setOutput(QVariant::fromValue(lines));
+            if (calcLine(modelCoefficients[0], modelCoefficients[1], lines))
+                setOutput(QVariant::fromValue(lines));
 
             qInfo() << "[Intersection Line Node]: Completed!";
         }

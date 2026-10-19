@@ -1,4 +1,6 @@
 #include "ImagePaintItem.h"
+#include <QMetaObject>
+#include <QThread>
 
 ImagePaintItem::ImagePaintItem(QQuickItem *parent) : QQuickItem(parent), hasRendered_(false), isRendererFinished_(true) {
     setFlag(ItemHasContents, true);
@@ -15,17 +17,30 @@ void ImagePaintItem::updateBackground() {
     if(hasRendered_)
         return;
 
-    imageThumb_ = QImage(200, 200, QImage::Format_RGB888);
-    imageThumb_.fill(color_);
+    {
+        std::lock_guard<std::mutex> lock(imageMutex_);
+        imageThumb_ = QImage(200, 200, QImage::Format_RGB888);
+        imageThumb_.fill(color_);
+    }
 
     emit renderImg();
 }
 
 void ImagePaintItem::updateImage(const QImage &image) {
+    if (QThread::currentThread() != thread()) {
+        const QImage snapshot = image.copy();
+        QMetaObject::invokeMethod(this, [this, snapshot] { updateImage(snapshot); },
+                                  Qt::QueuedConnection);
+        return;
+    }
+    if (image.isNull()) return;
     hasRendered_ = true;
 
     if(isRendererFinished_.load(std::memory_order_acquire)) {
-        imageThumb_ = image;
+        {
+            std::lock_guard<std::mutex> lock(imageMutex_);
+            imageThumb_ = image.copy();
+        }
         isRendererFinished_.store(false, std::memory_order_release);
 
         emit renderImg();
@@ -39,7 +54,13 @@ QSGNode *ImagePaintItem::updatePaintNode(QSGNode *oldNode,
     if (!node)
         node = new QSGSimpleTextureNode();
 
-    QSGTexture *texture = window()->createTextureFromImage(imageThumb_, QQuickWindow::TextureIsOpaque);
+    QImage snapshot;
+    {
+        std::lock_guard<std::mutex> lock(imageMutex_);
+        snapshot = imageThumb_;
+    }
+    if (!window() || snapshot.isNull()) return node;
+    QSGTexture *texture = window()->createTextureFromImage(snapshot, QQuickWindow::TextureIsOpaque);
 
     if(!texture)
         return node;
